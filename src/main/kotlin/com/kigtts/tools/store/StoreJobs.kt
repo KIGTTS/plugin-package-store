@@ -62,7 +62,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         }
         prepared = PreparedInstall(plan, artifacts); progress = null
     }
-    @Synchronized fun reloadInstalled() = start("") { refreshInstalled() }
+    @Synchronized fun reloadInstalled() { if (!busy && !closed) start("") { refreshInstalled() } }
     private fun start(label: String, refreshAll: Boolean = false, work: suspend () -> Unit) {
         check(!closed)
         check(!busy) { "请等待当前任务完成或先取消" }
