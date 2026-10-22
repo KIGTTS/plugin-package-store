@@ -39,7 +39,7 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
         PageBlock.Group("浏览", listOf(PageBlock.Actions(navigation)))),
         ManagementList("store", entries.drop(view.offset).take(12).map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs)
-        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", style = ManagementListStyle.CATALOG))
+        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", style = ManagementListStyle.CATALOG), onEnterAction = "store-enter")
 }
 
 internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {

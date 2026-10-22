@@ -13,13 +13,21 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     val artwork: CatalogArtworkCache? = null) {
     @Volatile private var active: Job? = null
+    private var refreshOnIdle = false
+    private var refreshingAll = false
+    private var closed = false
     @Volatile var status: String = ""; private set
     @Volatile var error: String = ""; private set
     @Volatile var progress: DownloadState? = null; private set
     @Volatile var prepared: PreparedInstall? = null; private set
     @Volatile var installed: Map<String, InstalledPackage> = emptyMap(); private set
     val busy get() = active != null
-    @Synchronized fun refresh(key: String? = null) = start("正在更新源") {
+    /** Entry requests coalesce with an active full refresh, or wait for downloads/local reloads. */
+    @Synchronized fun entered() {
+        if (closed || refreshingAll) return
+        if (busy) refreshOnIdle = true else refresh()
+    }
+    @Synchronized fun refresh(key: String? = null) = start("正在更新源", refreshAll = key == null) {
         refreshInstalled()
         val records = if (key == null) sources.records().filter { it.enabled } else listOf(sources.source(key))
         records.forEach { source ->
@@ -55,14 +63,22 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         prepared = PreparedInstall(plan, artifacts); progress = null
     }
     @Synchronized fun reloadInstalled() = start("") { refreshInstalled() }
-    private fun start(label: String, work: suspend () -> Unit) {
+    private fun start(label: String, refreshAll: Boolean = false, work: suspend () -> Unit) {
+        check(!closed)
         check(!busy) { "请等待当前任务完成或先取消" }
+        refreshingAll = refreshAll
         error = ""; status = label
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try { work() }
             catch (cancel: CancellationException) { throw cancel }
             catch (failure: Exception) { if (currentCoroutineContext().isActive) error = failure.message?.take(200) ?: "操作暂时无法完成" }
-            finally { progress = null; status = ""; active = null; changed() }
+            finally {
+                synchronized(this@StoreJobs) {
+                    progress = null; status = ""; active = null; refreshingAll = false
+                    if (refreshOnIdle && !closed) { refreshOnIdle = false; refresh() }
+                }
+                changed()
+            }
         }
         active = job
         job.start()
@@ -84,6 +100,6 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     }
     fun clearPrepared() { prepared = null; changed() }
     fun luaResources(artifact: VerifiedArtifact) = inspector.luaResources(artifact)
-    fun cancel() { active?.cancel(); downloader.cancel(); changed() }
-    suspend fun close() { cancel(); active?.join(); scope.cancel() }
+    @Synchronized fun cancel() { refreshOnIdle = false; active?.cancel(); downloader.cancel(); changed() }
+    suspend fun close() { synchronized(this) { closed = true }; cancel(); active?.join(); scope.cancel() }
 }

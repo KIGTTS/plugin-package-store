@@ -9,7 +9,7 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
     val catalog = sources.catalog(entry.source.key)
     return when (id) {
         "package" -> PluginPage(id, entry.item.name, commonStatus(jobs) + listOf(
-            PageBlock.Group(entry.item.name, listOf(markdown(entry.item.description.ifBlank { entry.item.summary }, catalog, jobs),
+            PageBlock.Group("介绍", listOf(markdown(entry.item.description.ifBlank { entry.item.summary }, catalog, jobs),
                 thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(entry.item.category) + entry.item.tags).distinct().joinToString(" · "))) +
                 listOfNotNull(installed?.let { PageBlock.Text("已安装 ${it.version}") }) +
                 listOfNotNull(release?.let { available -> if (!available.compatible(device)) PageBlock.Notice("此版本不适用于当前设备，请选择其它版本")
@@ -21,8 +21,9 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
                     }, PluginIcon.NONE, "download"))) })),
             PageBlock.Group("版本动态", listOf(markdown(release?.notes?.ifBlank { "暂无版本说明" } ?: "暂未提供兼容版本", catalog, jobs),
                 PageBlock.Actions(listOf(PageAction("versions", "所有版本", PluginIcon.NONE, "history"))))),
+            permissionDetails(release),
             PageBlock.Actions(listOf(PageAction("package-info", "来源与兼容性", PluginIcon.NONE, "info")))
-        ))
+        ), header = storeItem(entry, catalog, jobs, group = "").copy(primaryAction = null))
         "versions" -> PluginPage(id, "${entry.item.name} · 版本", emptyList(), ManagementList("versions", entry.item.releases.sortedByDescending { SemVersion.parse(it.version) }.map { version ->
             ManagementItem(version.versionCode.toString(), version.version,
                 listOfNotNull(if (!version.compatible(device)) "不兼容当前设备" else null, if (installed?.version == version.version) "已安装" else null, version.notes.takeIf(String::isNotBlank)).joinToString(" · "),

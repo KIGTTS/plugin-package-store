@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.1")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -29,7 +29,7 @@ class PackageStorePlugin : KigPlugin {
         downloader = PackageDownloader(environment.storage, transport)
         jobs = StoreJobs(environment, sources, device, downloader, ArtifactInspector(environment.storage), ::changed,
             artwork = CatalogArtworkCache(environment.storage, transport))
-        jobs.reloadInstalled() // Host metadata only; no source is contacted until the user refreshes.
+        jobs.reloadInstalled() // Preload local state; visible page entry requests the network refresh.
     }
     override val contributions = PluginContributions(settingsEntries = listOf(
         SettingsEntry("store", "插件商店", "store", PluginIcon.NONE, summary = "发现、安装与更新插件", symbol = "storefront")),
@@ -44,6 +44,7 @@ class PackageStorePlugin : KigPlugin {
         val prefix = actionId.substringBefore('/'); val id = actionId.substringAfter('/', "")
         val value = context.inputs["value"].orEmpty()
         return when (prefix) {
+            "store-enter" -> { jobs.entered(); PluginOutcome.RefreshUi }
             "add-source" -> context.inputs["url"]?.let(::propose) ?: PluginOutcome.TextInput("包源 HTTPS 地址", "source-address")
             "source-address" -> propose(value)
             "source-confirm" -> { check(!jobs.busy); val source = sources.confirm(id); jobs.refresh(source.key); PluginOutcome.OpenPage("sources") }

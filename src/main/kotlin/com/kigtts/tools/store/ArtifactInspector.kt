@@ -32,6 +32,13 @@ class ArtifactInspector(private val storage: PluginStorage) {
         val key = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(keyBytes))
         require((key as java.security.interfaces.RSAPublicKey).modulus.bitLength() >= 2048)
         require(Signature.getInstance("SHA256withRSA").run { initVerify(key); update(raw); verify(read(zip, "signature/manifest.sig", 8192)) }) { "包签名不正确" }
+        release.permissions?.let { advertised ->
+            val actual = manifest[if (release.format == PackageFormat.NATIVE) "capabilities" else "permissions"]
+                ?.jsonArray.orEmpty().map { it.jsonPrimitive.content }.filterNot { it == "ui" }.toSet()
+            require(actual == advertised.toSet()) { "签名清单的权限与目录不同" }
+            val purposes = manifest["permissionPurposes"]?.jsonObject.orEmpty().mapValues { it.value.jsonPrimitive.content }
+            require(release.permissionPurposes.all { (id, purpose) -> purposes[id] == purpose }) { "签名清单的权限用途与目录不同" }
+        }
         val declared = manifest.getValue("files").jsonObject.mapValues { it.value.jsonPrimitive.content }
         manifest["dependencies"]?.jsonObject?.let { require(it.mapValues { entry -> entry.value.jsonPrimitive.content } == release.dependencies) { "签名清单的依赖与目录不同" } }
         val payload = entries.filter { !it.isDirectory && it.name !in setOf(manifestName, "signature/public.der", "signature/manifest.sig") }

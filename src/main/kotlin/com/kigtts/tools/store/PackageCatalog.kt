@@ -10,7 +10,8 @@ import java.net.URI
 @Serializable data class PackageRelease(val version: String, val versionCode: Int, val format: PackageFormat,
     val sha256: String, val bytes: Long, val expectedPublisher: String, val mirrors: List<PackageMirror>,
     val apiVersion: Int = PLUGIN_API_VERSION, val minSdk: Int = 26, val abis: List<String> = emptyList(), val notes: String = "",
-    val dependencies: Map<String, String> = emptyMap())
+    val dependencies: Map<String, String> = emptyMap(),
+    val permissions: List<String>? = null, val permissionPurposes: Map<String, String> = emptyMap())
 @Serializable data class CatalogPackage(val id: String, val name: String, val summary: String, val releases: List<PackageRelease>,
     val category: String = "扩展", val tags: List<String> = emptyList(), val license: String = "MIT", val homepage: String = "",
     val icon: CatalogIcon? = null, val description: String = "", val thumbnails: List<String> = emptyList())
@@ -50,6 +51,7 @@ object CatalogCodec {
                 release.mirrors.forEach { require(it.name.length in 1..80) }
                 require(release.dependencies.size <= 32 && release.dependencies.keys.all(ID::matches))
                 release.dependencies.values.forEach(VersionRange::parse)
+                validatePermissions(release)
                 if (release.format == PackageFormat.LUA) require("runtime.lua" in release.dependencies) { "Lua 包需声明 runtime.lua 前置依赖" }
             }
         }
