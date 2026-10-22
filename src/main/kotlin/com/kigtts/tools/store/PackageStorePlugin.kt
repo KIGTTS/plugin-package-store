@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.1")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.2")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -53,7 +53,7 @@ class PackageStorePlugin : KigPlugin {
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
             "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.category }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
-            "refresh" -> { jobs.refresh(id.ifBlank { null }); PluginOutcome.RefreshUi }
+            "refresh" -> { if (id.isBlank()) jobs.entered() else jobs.refresh(id); PluginOutcome.RefreshUi }
             "source-toggle" -> { check(!jobs.busy); sources.toggle(id); view.offset = 0; PluginOutcome.RefreshUi }
             "source-remove" -> PluginOutcome.Menu("移除此源？", listOf(PageAction("source-remove-confirm/$id", "移除", PluginIcon.CLOSE)))
             "source-remove-confirm" -> { check(!jobs.busy); sources.remove(id); if (view.source == id) view.source = null; view.offset = 0; PluginOutcome.RefreshUi }

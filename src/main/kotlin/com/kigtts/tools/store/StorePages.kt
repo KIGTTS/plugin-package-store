@@ -31,9 +31,9 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
     "await-install" -> PluginPage(id, "等待确认", listOf(PageBlock.Notice("请在安装页面完成确认。商店会以主程序的已安装状态为准。"),
         PageBlock.Actions(listOf(PageAction("continue-install", "检查并继续", PluginIcon.EXPORT), PageAction("install-cancel", "返回商店", PluginIcon.CLOSE)))))
     else -> null
-}
+}?.copy(loading = jobs.busy, refreshAction = if (id in setOf("store", "library", "updates", "sources")) "refresh" else null)
 internal fun commonStatus(jobs: StoreJobs): List<PageBlock> = buildList {
-    if (jobs.busy && jobs.status.isNotEmpty()) {
+    if (jobs.busy && !jobs.refreshing && jobs.status.isNotEmpty()) {
         add(PageBlock.Notice(jobs.progress?.let { "${jobs.status} · ${(it.bytes * 100 / it.total).coerceIn(0, 100)}%" } ?: jobs.status))
         add(PageBlock.Actions(listOf(PageAction("cancel-job", "取消", PluginIcon.CLOSE))))
     }

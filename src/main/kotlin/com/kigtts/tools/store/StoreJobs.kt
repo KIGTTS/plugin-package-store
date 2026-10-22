@@ -20,6 +20,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     @Volatile var error: String = ""; private set
     @Volatile var progress: DownloadState? = null; private set
     @Volatile var prepared: PreparedInstall? = null; private set
+    @Volatile var refreshing: Boolean = false; private set
     @Volatile var installed: Map<String, InstalledPackage> = emptyMap(); private set
     val busy get() = active != null
     /** Entry requests coalesce with an active full refresh, or wait for downloads/local reloads. */
@@ -27,7 +28,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         if (closed || refreshingAll) return
         if (busy) refreshOnIdle = true else refresh()
     }
-    @Synchronized fun refresh(key: String? = null) = start("正在更新源", refreshAll = key == null) {
+    @Synchronized fun refresh(key: String? = null) = start("正在更新源", refreshAll = key == null, sourceRefresh = true) {
         refreshInstalled()
         val records = if (key == null) sources.records().filter { it.enabled } else listOf(sources.source(key))
         records.forEach { source ->
@@ -63,10 +64,11 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         prepared = PreparedInstall(plan, artifacts); progress = null
     }
     @Synchronized fun reloadInstalled() { if (!busy && !closed) start("") { refreshInstalled() } }
-    private fun start(label: String, refreshAll: Boolean = false, work: suspend () -> Unit) {
+    private fun start(label: String, refreshAll: Boolean = false, sourceRefresh: Boolean = false, work: suspend () -> Unit) {
         check(!closed)
         check(!busy) { "请等待当前任务完成或先取消" }
         refreshingAll = refreshAll
+        refreshing = sourceRefresh
         error = ""; status = label
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try { work() }
@@ -74,7 +76,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             catch (failure: Exception) { if (currentCoroutineContext().isActive) error = failure.message?.take(200) ?: "操作暂时无法完成" }
             finally {
                 synchronized(this@StoreJobs) {
-                    progress = null; status = ""; active = null; refreshingAll = false
+                    progress = null; status = ""; active = null; refreshingAll = false; refreshing = false
                     if (refreshOnIdle && !closed) { refreshOnIdle = false; refresh() }
                 }
                 changed()
