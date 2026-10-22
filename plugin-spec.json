@@ -1,21 +1,23 @@
 {
   "id": "tools.package-store",
   "name": "插件商店",
-  "version": "0.10.3",
-  "versionCode": 11,
+  "version": "0.11.0",
+  "versionCode": 12,
   "entryClass": "com.kigtts.tools.store.PackageStorePlugin",
-  "apiVersion": 16,
+  "apiVersion": 23,
   "minSdk": 26,
   "runtime": "android-dex",
   "license": "MIT",
-  "icon": { "symbol": "storefront" },
+  "icon": {
+    "symbol": "storefront"
+  },
   "capabilities": [
     "ui",
     "network",
     "app-control"
   ],
   "permissionPurposes": {
-    "network": "获取用户添加的包源清单并通过HTTPS和受限CDN跳转下载已选插件。",
-    "app-control": "核实插件安装状态并将用户确认的安装计划提交宿主审核。"
+    "network": "更新你添加的插件目录，并下载所选插件和预览图片。",
+    "app-control": "检查已安装的插件，并在你确认后打开插件安装页面。"
   }
 }

@@ -50,7 +50,7 @@ class StoreEntryRefreshTest {
         val updating = storePage("store", sources, jobs, StoreView(), testDevice)!!
         assertTrue(updating.loading)
         assertFalse(updating.blocks.filterIsInstance<PageBlock.Notice>().any { it.text.contains("正在更新源") })
-        assertEquals(listOf("search", "library", "store-settings"), updating.blocks.filterIsInstance<PageBlock.Actions>().flatMap { it.actions }.map { it.id })
+        assertEquals(listOf("search", "library", "downloads", "store-settings"), updating.blocks.filterIsInstance<PageBlock.Actions>().flatMap { it.actions }.map { it.id })
         // Repeated manual pulls and visible entries use the same coalesced request.
         jobs.entered(); advanceUntilIdle()
         assertEquals(3, calls); assertFalse(jobs.refreshing)

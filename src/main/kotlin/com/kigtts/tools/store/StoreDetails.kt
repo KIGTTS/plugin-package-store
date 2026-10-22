@@ -13,9 +13,10 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
                 thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(entry.item.category) + entry.item.tags).distinct().joinToString(" · "))) +
                 listOfNotNull(installed?.let { PageBlock.Text("已安装 ${it.version}") }) +
                 listOfNotNull(release?.let { available -> if (!available.compatible(device)) PageBlock.Notice("此版本不适用于当前设备，请选择其它版本")
+                    else if (installed?.version == available.version && installed.apiVersion == available.apiVersion &&
+                        (available.format == PackageFormat.LUA || installed.versionCode == available.versionCode)) PageBlock.Text("已安装此版本")
                     else PageBlock.Actions(listOf(PageAction("prepare", when {
                         installed == null -> "安装"
-                        installed.version == available.version && installed.apiVersion == available.apiVersion -> "重新安装"
                         SemVersion.parse(available.version) > SemVersion.parse(installed.version) -> "更新"
                         else -> "安装所选版本"
                     }, PluginIcon.NONE, "download"))) })),
@@ -33,10 +34,10 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
         "package-info" -> PluginPage(id, "来源与兼容性", listOf(PageBlock.Group("插件来源", listOf(
             PageBlock.Text(entry.source.name), markdown(catalog?.readme?.ifBlank { catalog.description } ?: "", catalog, jobs), PageBlock.Text("插件标识：${entry.item.id}"), PageBlock.Text("许可：${entry.item.license}"))),
             PageBlock.Group("所选版本", buildList {
-                add(PageBlock.Text(release?.let { "${it.version} · Android ${it.minSdk}+ · 插件接口 ${it.apiVersion}" } ?: "暂无兼容版本"))
+                add(PageBlock.Text(release?.let { "${it.version} · Android ${it.minSdk}+ · KIGTTS API ${it.apiVersion}+" } ?: "暂无兼容版本"))
                 release?.let { add(PageBlock.Text("发布者 SHA-256：${it.expectedPublisher}"))
                     add(PageBlock.Text("下载大小：${(it.bytes + 1023) / 1024} KiB · ${it.mirrors.size} 个下载地址"))
-                    if (it.dependencies.isNotEmpty()) add(PageBlock.Text("安装时自动检查前置依赖：" + it.dependencies.entries.joinToString { dependency -> "${dependency.key} ${dependency.value}" })) }
+                    if (it.dependencies.isNotEmpty()) add(PageBlock.Text("还需要安装：" + it.dependencies.entries.joinToString { dependency -> "${dependency.key} ${dependency.value}" })) }
             })))
         else -> null
     }

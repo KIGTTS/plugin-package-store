@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.3")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.11.0")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -18,9 +18,6 @@ class PackageStorePlugin : KigPlugin {
     private val changes = MutableStateFlow(0L)
     override val uiChanges get() = changes
     private val actions = Mutex()
-    private var awaiting: PreparedInstall? = null
-    private var nativeSubmitted = false
-    private val submittedLua = mutableSetOf<String>()
     private fun changed() { changes.update { it + 1 } }
     override suspend fun attach(environment: PluginEnvironment) {
         this.environment = environment
@@ -29,6 +26,8 @@ class PackageStorePlugin : KigPlugin {
         downloader = PackageDownloader(environment.storage, transport)
         jobs = StoreJobs(environment, sources, device, downloader, ArtifactInspector(environment.storage), ::changed,
             artwork = CatalogArtworkCache(environment.storage, transport))
+        jobs.downloads = StoreDownloads(environment, sources, device,
+            PackageDownloader(environment.storage, HttpsStoreTransport { environment.requirePermission("network") }), ArtifactInspector(environment.storage), ::changed)
         jobs.reloadInstalled() // Preload local state; visible page entry requests the network refresh.
     }
     override val contributions = PluginContributions(settingsEntries = listOf(
@@ -44,12 +43,13 @@ class PackageStorePlugin : KigPlugin {
         val prefix = actionId.substringBefore('/'); val id = actionId.substringAfter('/', "")
         val value = context.inputs["value"].orEmpty()
         return when (prefix) {
-            "store-enter" -> { jobs.entered(); PluginOutcome.RefreshUi }
-            "add-source" -> context.inputs["url"]?.let(::propose) ?: PluginOutcome.TextInput("包源 HTTPS 地址", "source-address")
+            "store-enter" -> { jobs.downloads?.reconcile(); jobs.entered(); PluginOutcome.RefreshUi }
+            "downloads-enter" -> { jobs.downloads?.reconcile(); jobs.reloadInstalled(); PluginOutcome.RefreshUi }
+            "add-source" -> context.inputs["url"]?.let(::propose) ?: PluginOutcome.TextInput("插件源地址（HTTPS）", "source-address")
             "source-address" -> propose(value)
             "source-confirm" -> { check(!jobs.busy); val source = sources.confirm(id); jobs.refresh(source.key); PluginOutcome.OpenPage("sources") }
             "source-cancel" -> { sources.cancelCandidate(); PluginOutcome.OpenPage("sources") }
-            "sources", "store-settings", "downloads", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
+            "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
             "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.category }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
@@ -73,61 +73,43 @@ class PackageStorePlugin : KigPlugin {
             }
             "versions", "package-info" -> PluginOutcome.OpenPage(prefix)
             "version" -> { requireNotNull(view.selected).item.releases.single { it.versionCode == id.toInt() && it.compatible(device) }; view.selectedVersion = id.toInt(); PluginOutcome.OpenPage("package") }
-            "prepare" -> {
-                check(awaiting == null) { "请先处理上一份安装计划" }
-                jobs.prepare(requireNotNull(view.selected), requireNotNull(view.selectedVersion)); PluginOutcome.OpenPage("install-plan")
+            "prepare" -> beginDownload(requireNotNull(view.selected), requireNotNull(view.selectedVersion))
+            "download-get" -> {
+                val parts = id.split('/')
+                val entry = sources.entries().first { it.source.key == parts[0] && it.item.id == parts[1] }
+                beginDownload(entry, parts[2].toInt())
             }
-            "show-plan" -> PluginOutcome.OpenPage("install-plan")
-            "download-plan" -> { jobs.downloadPlan(); PluginOutcome.RefreshUi }
-            "install-plan" -> {
-                check(!jobs.busy)
-                if (awaiting == null) { awaiting = requireNotNull(jobs.prepared); nativeSubmitted = false; submittedLua.clear() }
-                continueInstallation()
-            }
-            "continue-install" -> continueInstallation()
-            "install-cancel" -> { check(!jobs.busy); awaiting = null; nativeSubmitted = false; submittedLua.clear(); jobs.clearPrepared(); PluginOutcome.OpenPage("store") }
+            "download-review" -> reviewDownload(requireNotNull(jobs.downloads).task(id))
+            "download-confirm" -> { requireNotNull(jobs.downloads).confirm(id); PluginOutcome.RefreshUi }
+            "download-retry" -> { requireNotNull(jobs.downloads).retry(id); PluginOutcome.RefreshUi }
+            "download-cancel" -> { requireNotNull(jobs.downloads).cancel(id); PluginOutcome.RefreshUi }
+            "download-install" -> requireNotNull(jobs.downloads).install(id)
+            "downloads-clear-finished" -> { jobs.downloads?.clearFinished(); PluginOutcome.RefreshUi }
+            "show-plan", "continue-install" -> PluginOutcome.OpenPage("downloads")
+            "install-cancel" -> { jobs.clearPrepared(); PluginOutcome.OpenPage("store") }
             "cancel-job" -> { jobs.cancel(); PluginOutcome.RefreshUi }
             "clear-cache" -> PluginOutcome.Menu("清除已下载的包？", listOf(PageAction("clear-cache-confirm", "清除", PluginIcon.CLOSE)))
-            "clear-cache-confirm" -> { check(!jobs.busy && awaiting == null); downloader.clearDownloads(); jobs.clearPrepared(); PluginOutcome.RefreshUi }
+            "clear-cache-confirm" -> { check(!jobs.busy && jobs.downloads?.canClearCache() != false) { "请先完成或取消下载任务" }; downloader.clearDownloads(); jobs.clearPrepared(); PluginOutcome.RefreshUi }
             else -> PluginOutcome.Message("未知商店操作")
         }
     }
-    private fun propose(url: String): PluginOutcome { sources.propose(url); return PluginOutcome.OpenPage("source-review") }
-    private suspend fun continueInstallation(): PluginOutcome {
-        val ready = awaiting ?: return PluginOutcome.Message("没有待继续的安装")
-        val native = ready.artifacts.filter { it.second.format == PackageFormat.NATIVE }
-        if (native.isNotEmpty() && !nativeSubmitted) {
-            val current = environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data
-            if (current != null && native.all { actualInstalled(current.value, it.first) }) nativeSubmitted = true
-        }
-        if (native.isNotEmpty() && !nativeSubmitted) {
-            nativeSubmitted = true
-            val root = native.last().second
-            return PluginOutcome.InstallPackage(resource(root.file), allowDowngrade = ready.plan.downgrades.isNotEmpty(),
-                dependencies = native.dropLast(1).map { resource(it.second.file) })
-        }
-        if (native.isNotEmpty()) {
-            val state = environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data ?: return PluginOutcome.Message("无法检查安装状态")
-            // Check typed metadata below; never infer success from submitting an installation outcome.
-            if (!native.all { actualInstalled(state.value, it.first) }) return PluginOutcome.Message("部分前置包尚未安装，请完成确认后再继续")
-        }
-        if (submittedLua.isNotEmpty()) {
-            val state = environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data ?: return PluginOutcome.Message("无法检查 Lua 安装状态")
-            val submitted = ready.artifacts.filter { it.first.entry.item.id in submittedLua }
-            if (!submitted.all { actualInstalled(state.value, it.first) }) return PluginOutcome.Message("请完成 Lua 插件的审核后再继续")
-        }
-        val lua = ready.artifacts.firstOrNull { it.second.format == PackageFormat.LUA && it.first.entry.item.id !in submittedLua }
-        if (lua != null) {
-            val directory = jobs.luaResources(lua.second)
-            val reply = requireNotNull(environment.appBroker).request(AppCommand.DeliverResource("runtime.lua", resource(directory), "import"))
-            if (reply is AppReply.Failure) return PluginOutcome.Message(reply.message)
-            submittedLua += lua.first.entry.item.id
-            // The broker has opened runtime.lua's review page; do not navigate away from that approval.
-            return PluginOutcome.RefreshUi
-        }
-        awaiting = null; jobs.clearPrepared(); jobs.reloadInstalled()
-        return PluginOutcome.OpenPage("store")
+    private fun propose(url: String): PluginOutcome = proposeSource(sources, view, url)
+    private suspend fun beginDownload(entry: CatalogEntry, version: Int): PluginOutcome {
+        val downloads = requireNotNull(jobs.downloads)
+        downloads.reconcile()
+        val task = downloads.offer(entry, version, jobs.installed)
+        return reviewDownload(task)
     }
-    private fun resource(file: java.io.File) = PluginResource(file.relativeTo(environment.storage.root).invariantSeparatorsPath)
-    override suspend fun close() { if (::jobs.isInitialized) jobs.close() }
+    private fun reviewDownload(task: StoreDownload): PluginOutcome {
+        if (task.phase != StoreDownloadPhase.CONFIRM) return PluginOutcome.RefreshUi
+        if (task.plan.ordered.size > 1 || task.plan.downgrades.isNotEmpty()) {
+            val names = task.plan.ordered.joinToString("\n") { "• ${it.entry.item.name} ${it.release.version}" }
+            return PluginOutcome.Confirm("确认下载", "将下载以下插件：\n\n$names" +
+                if (task.plan.downgrades.isNotEmpty()) "\n\n包含较早版本，安装前请确认兼容性。" else "",
+                PageAction("download-confirm/${task.id}", "确认并下载", PluginIcon.NONE, "download"), "稍后")
+        }
+        requireNotNull(jobs.downloads).confirm(task.id)
+        return PluginOutcome.RefreshUi
+    }
+    override suspend fun close() { if (::jobs.isInitialized) { jobs.downloads?.close(); jobs.close() } }
 }

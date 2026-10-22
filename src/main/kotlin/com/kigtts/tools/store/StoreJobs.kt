@@ -12,6 +12,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     private val downloader: PackageDownloader, private val inspector: ArtifactInspector, private val changed: () -> Unit,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     val artwork: CatalogArtworkCache? = null) {
+    internal var downloads: StoreDownloads? = null
     @Volatile private var active: Job? = null
     private var refreshOnIdle = false
     private var refreshingAll = false

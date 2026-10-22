@@ -32,7 +32,7 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     @Synchronized fun pending() = state.pending
     @Synchronized fun propose(url: String): SourceCandidate {
         val normalized = CatalogCodec.https(url)
-        require(state.records.none { it.url == normalized }) { "此源已添加" }
+        require(state.records.none { it.url == normalized }) { "这个源已经添加过了，可在“插件来源”中查看。" }
         return SourceCandidate(url = normalized).also { state = state.copy(pending = it); save() }
     }
     @Synchronized fun cancelCandidate() { state = state.copy(pending = null); save() }
@@ -49,7 +49,7 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
         CatalogCodec.validate(catalog)
         val previous = source(key)
         require(previous.catalogId == null || previous.catalogId == catalog.id) { "源 ID 发生变化，请移除后重新确认" }
-        require(state.records.none { it.key != key && it.catalogId == catalog.id }) { "此源 ID 已由另一个地址提供" }
+        require(state.records.none { it.key != key && it.catalogId == catalog.id }) { "这个源已通过其它地址添加，可在“插件来源”中查看。" }
         atomic(storage.file("catalogs/$key.json"), PluginJson.encodeToString(catalog))
         catalogs[key] = catalog
         update(previous.copy(name = catalog.name, catalogId = catalog.id, lastFetched = System.currentTimeMillis(), error = ""))

@@ -23,7 +23,7 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
     val entries = discover(all, view.copy(filter = "all"), jobs.installed, device)
     val categories = all.map { it.item.category }.distinct().sorted()
     val blocks = listOf(PageBlock.Actions(listOf(
-        storeAction("search", "搜索", "search"), storeAction("library", "我的", "apps"), storeAction("store-settings", "设置", "settings")
+        storeAction("search", "搜索", "search"), storeAction("library", "我的", "apps"), storeAction("downloads", "下载管理", "download"), storeAction("store-settings", "设置", "settings")
     ))) + commonStatus(jobs) + listOfNotNull(
         view.query.takeIf { it.isNotBlank() }?.let { PageBlock.Text("“$it”的搜索结果") },
         categories.takeIf { it.isNotEmpty() }?.let { PageBlock.Select("分类", listOf(storeAction("category/all", "全部", "category")) + it.map { category -> storeAction("category/${categoryKey(category)}", category, "extension") }, view.category?.let { "category/${categoryKey(it)}" } ?: "category/all", symbol = "category") },
@@ -39,7 +39,7 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
         PageBlock.Group("浏览", listOf(PageBlock.Actions(navigation)))),
         ManagementList("store", entries.drop(view.offset).take(12).map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs)
-        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", style = ManagementListStyle.CATALOG), onEnterAction = "store-enter")
+        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", style = ManagementListStyle.CATALOG, itemActions = downloadActions(entries.drop(view.offset).take(12), jobs, device)), onEnterAction = "store-enter")
 }
 
 internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {
@@ -56,15 +56,15 @@ internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view
             group = "已安装") } + if (updating) emptyList() else jobs.installed.values.filter { installed -> entries.none { it.item.id == installed.id } }.sortedBy { it.id }.map { installed ->
                 ManagementItem(installed.id, installed.id, "已安装 ${installed.version} · 不在当前来源中", icon = PluginIcon.MENU, primaryAction = "manage-plugins")
             },
-            emptyText = if (updating) "当前目录中的插件均已是最新版本" else "安装喜欢的插件后，会在这里找到它们", style = ManagementListStyle.CATALOG))
+            emptyText = if (updating) "当前目录中的插件均已是最新版本" else "安装喜欢的插件后，会在这里找到它们", style = ManagementListStyle.CATALOG, itemActions = downloadActions(entries, jobs, device)))
 }
 
 internal fun storeSettingsPage(jobs: StoreJobs) = PluginPage("store-settings", "商店设置", commonStatus(jobs) + listOf(
     PageBlock.Group("内容来源", listOf(
         PageBlock.Actions(listOf(storeAction("sources", "插件来源", "source"), storeAction("source-select", "筛选浏览来源", "filter_alt"))))),
-    PageBlock.Group("下载与存储", listOf(PageBlock.Actions(listOf(storeAction("downloads", "下载与缓存", "download")))))
+    PageBlock.Group("下载与存储", listOf(PageBlock.Actions(listOf(storeAction("downloads", "下载管理", "download")))))
 ))
-internal fun downloadsPage(jobs: StoreJobs) = PluginPage("downloads", "下载与缓存", commonStatus(jobs) + listOf(
-    PageBlock.Text("插件下载完成后会核对完整性、发布者与依赖，安装前保留确认步骤。"),
+internal fun downloadsPage(jobs: StoreJobs) = PluginPage("download-storage", "存储空间", commonStatus(jobs) + listOf(
+    PageBlock.Text("清除已下载的安装包，可释放存储空间。已安装的插件不受影响。"),
     PageBlock.Actions(listOf(storeAction("clear-cache", "清除安装包缓存", "cleaning_services")))
 ))
