@@ -20,6 +20,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     @Volatile var error: String = ""; private set
     @Volatile var progress: DownloadState? = null; private set
     @Volatile var prepared: PreparedInstall? = null; private set
+    @Volatile var pendingPlan: DependencyPlan? = null; private set
     @Volatile var refreshing: Boolean = false; private set
     @Volatile var installed: Map<String, InstalledPackage> = emptyMap(); private set
     val busy get() = active != null
@@ -47,8 +48,14 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         }
     }
     @Synchronized fun prepare(entry: CatalogEntry, versionCode: Int) = start("正在检查前置依赖") {
-        prepared = null; refreshInstalled()
-        val plan = DependencyResolver(sources.entries(), installed, device).resolve(entry, versionCode)
+        prepared = null; pendingPlan = null; refreshInstalled()
+        pendingPlan = DependencyResolver(sources.entries(), installed, device).resolve(entry, versionCode)
+    }
+    /** Downloads only the exact dependency/version snapshot the user has reviewed. */
+    @Synchronized fun downloadPlan() {
+        val plan = requireNotNull(pendingPlan) { "请先检查安装计划" }
+        start("正在下载安装包") {
+        prepared = null
         val artifacts = mutableListOf<Pair<PlannedRelease, VerifiedArtifact>>()
         plan.ordered.forEach { selected ->
             status = "正在下载 ${selected.entry.item.name} ${selected.release.version}"; changed()
@@ -62,6 +69,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             artifacts += selected to inspector.inspect(file, selected.entry, selected.release) { context.ensureActive() }
         }
         prepared = PreparedInstall(plan, artifacts); progress = null
+        }
     }
     @Synchronized fun reloadInstalled() { if (!busy && !closed) start("") { refreshInstalled() } }
     private fun start(label: String, refreshAll: Boolean = false, sourceRefresh: Boolean = false, work: suspend () -> Unit) {
@@ -100,7 +108,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             }.getOrNull()
         }.associateBy { it.id }
     }
-    fun clearPrepared() { prepared = null; changed() }
+    fun clearPrepared() { prepared = null; pendingPlan = null; changed() }
     fun luaResources(artifact: VerifiedArtifact) = inspector.luaResources(artifact)
     @Synchronized fun cancel() { refreshOnIdle = false; active?.cancel(); downloader.cancel(); changed() }
     suspend fun close() { synchronized(this) { closed = true }; cancel(); active?.join(); scope.cancel() }

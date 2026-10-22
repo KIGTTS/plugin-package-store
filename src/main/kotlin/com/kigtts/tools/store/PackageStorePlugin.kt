@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.2")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.10.3")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -78,6 +78,7 @@ class PackageStorePlugin : KigPlugin {
                 jobs.prepare(requireNotNull(view.selected), requireNotNull(view.selectedVersion)); PluginOutcome.OpenPage("install-plan")
             }
             "show-plan" -> PluginOutcome.OpenPage("install-plan")
+            "download-plan" -> { jobs.downloadPlan(); PluginOutcome.RefreshUi }
             "install-plan" -> {
                 check(!jobs.busy)
                 if (awaiting == null) { awaiting = requireNotNull(jobs.prepared); nativeSubmitted = false; submittedLua.clear() }
