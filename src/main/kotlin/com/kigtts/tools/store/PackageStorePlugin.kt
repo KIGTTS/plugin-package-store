@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.11.1")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.11.2")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -33,7 +33,10 @@ class PackageStorePlugin : KigPlugin {
     override val contributions = PluginContributions(settingsEntries = listOf(
         SettingsEntry("store", "插件商店", "store", PluginIcon.NONE, summary = "发现、安装与更新插件", symbol = "storefront")),
         automationActions = listOf("add-source"), sourceAction = "add-source")
-    override fun page(pageId: String, context: PluginContext) = storePage(pageId, sources, jobs, view.copy(), device)
+    override fun page(pageId: String, context: PluginContext): PluginPage? {
+        if (pageId == "package") sourcePackagePage(sources, jobs, view, device)?.let { return it }
+        return storePage(pageId, sources, jobs, view.copy(), device)
+    }
     override suspend fun execute(actionId: String, context: PluginContext): PluginOutcome = actions.withLock {
         try { perform(actionId, context).also { changed() } }
         catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
@@ -45,10 +48,23 @@ class PackageStorePlugin : KigPlugin {
         return when (prefix) {
             "store-enter" -> { jobs.downloads?.reconcile(); jobs.entered(); PluginOutcome.RefreshUi }
             "downloads-enter" -> { jobs.downloads?.reconcile(); jobs.reloadInstalled(); PluginOutcome.RefreshUi }
-            "add-source" -> context.inputs["url"]?.let(::propose) ?: PluginOutcome.TextInput("插件源地址（HTTPS）", "source-address")
+            "add-source" -> context.inputs["url"]?.let { url ->
+                proposeSource(sources, view, url, context.inputs["packageId"]).also {
+                    if (view.linkTarget != null && sources.records().any { it.url == url && it.enabled }) jobs.entered()
+                }
+            } ?: PluginOutcome.TextInput("插件源地址（HTTPS）", "source-address")
             "source-address" -> propose(value)
-            "source-confirm" -> { check(!jobs.busy); val source = sources.confirm(id); jobs.refresh(source.key); PluginOutcome.OpenPage("sources") }
-            "source-cancel" -> { sources.cancelCandidate(); PluginOutcome.OpenPage("sources") }
+            "source-confirm" -> {
+                check(!jobs.busy)
+                val candidate = requireNotNull(sources.pending())
+                val source = sources.confirm(id)
+                view.linkTarget = candidate.packageId?.let { SourcePackageTarget(source.url, it) }
+                view.selected = null; view.selectedVersion = null
+                jobs.refresh(source.key)
+                PluginOutcome.OpenPage(if (view.linkTarget != null) "package" else "sources")
+            }
+            "source-cancel" -> { sources.cancelCandidate(); view.linkTarget = null; PluginOutcome.OpenPage("sources") }
+            "target-refresh" -> { view.linkTarget?.let { target -> sources.records().firstOrNull { it.url == target.url && it.enabled }?.let { jobs.entered() } }; PluginOutcome.RefreshUi }
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
@@ -67,6 +83,7 @@ class PackageStorePlugin : KigPlugin {
             "next" -> { view.offset += 12; PluginOutcome.RefreshUi }
             "previous" -> { view.offset = (view.offset - 12).coerceAtLeast(0); PluginOutcome.RefreshUi }
             "package" -> {
+                view.linkTarget = null
                 val sourceKey = id.substringBefore('/'); val packageId = id.substringAfter('/')
                 view.selected = sources.entries().first { it.source.key == sourceKey && it.item.id == packageId }
                 view.selectedVersion = view.selected!!.latest(device)?.versionCode; PluginOutcome.OpenPage("package")

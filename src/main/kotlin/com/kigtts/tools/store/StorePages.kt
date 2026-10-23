@@ -3,7 +3,8 @@ package com.kigtts.tools.store
 import com.kigtts.plugin.api.*
 
 data class StoreView(var query: String = "", var filter: String = "all", var source: String? = null, var offset: Int = 0,
-    var selected: CatalogEntry? = null, var selectedVersion: Int? = null, var category: String? = null, var sourceNotice: String = "")
+    var selected: CatalogEntry? = null, var selectedVersion: Int? = null, var category: String? = null, var sourceNotice: String = "",
+    var linkTarget: SourcePackageTarget? = null)
 internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage? = when (id) {
     "store" -> discoveryPage(sources, jobs, view, device)
     "search" -> storeSearchPage(sources, jobs, view, device)

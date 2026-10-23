@@ -9,7 +9,7 @@ import java.util.UUID
 
 @Serializable data class SourceRecord(val key: String = UUID.randomUUID().toString(), val url: String,
     val name: String, val enabled: Boolean = true, val catalogId: String? = null, val lastFetched: Long = 0, val error: String = "")
-@Serializable data class SourceCandidate(val token: String = UUID.randomUUID().toString(), val url: String)
+@Serializable data class SourceCandidate(val token: String = UUID.randomUUID().toString(), val url: String, val packageId: String? = null)
 @Serializable private data class SourceConfiguration(val records: List<SourceRecord> = emptyList(), val pending: SourceCandidate? = null, val officialSourceSeeded: Boolean = false)
 
 /** Source approval and package publisher trust are independent; adding a source never installs a package. */
@@ -30,10 +30,11 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     }
     @Synchronized fun records() = state.records
     @Synchronized fun pending() = state.pending
-    @Synchronized fun propose(url: String): SourceCandidate {
+    @Synchronized fun propose(url: String, packageId: String? = null): SourceCandidate {
+        require(packageId == null || CatalogCodec.ID.matches(packageId)) { "插件标识不合法" }
         val normalized = CatalogCodec.https(url)
         require(state.records.none { it.url == normalized }) { "这个源已经添加过了，可在“插件来源”中查看。" }
-        return SourceCandidate(url = normalized).also { state = state.copy(pending = it); save() }
+        return SourceCandidate(url = normalized, packageId = packageId).also { state = state.copy(pending = it); save() }
     }
     @Synchronized fun cancelCandidate() { state = state.copy(pending = null); save() }
     @Synchronized fun confirm(token: String): SourceRecord {
