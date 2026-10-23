@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.11.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.11.1")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -61,7 +61,7 @@ class PackageStorePlugin : KigPlugin {
             "browse-source" -> { view.source = id; view.offset = 0; PluginOutcome.OpenPage("store") }
             "source-select" -> PluginOutcome.Menu("来源", listOf(PageAction("source-filter/all", "全部源")) + sources.records().filter { it.enabled }.map { PageAction("source-filter/${it.key}", it.name) })
             "source-filter" -> { view.source = id.takeUnless { it == "all" }; view.offset = 0; PluginOutcome.OpenPage("store") }
-            "search" -> PluginOutcome.TextInput("搜索插件", "search-save", view.query)
+            "search" -> { view.query = ""; view.offset = 0; PluginOutcome.OpenPage("search") }
             "search-save" -> { require(value.length <= 100); view.query = value; view.offset = 0; PluginOutcome.RefreshUi }
             "filter" -> { require(id in listOf("all", "installed", "updates")); view.filter = id; view.offset = 0; PluginOutcome.OpenPage(when(id) { "installed" -> "library"; "updates" -> "updates"; else -> "store" }) }
             "next" -> { view.offset += 12; PluginOutcome.RefreshUi }

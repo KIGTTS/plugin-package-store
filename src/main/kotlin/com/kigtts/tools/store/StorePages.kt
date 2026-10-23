@@ -6,6 +6,7 @@ data class StoreView(var query: String = "", var filter: String = "all", var sou
     var selected: CatalogEntry? = null, var selectedVersion: Int? = null, var category: String? = null, var sourceNotice: String = "")
 internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage? = when (id) {
     "store" -> discoveryPage(sources, jobs, view, device)
+    "search" -> storeSearchPage(sources, jobs, view, device)
     "library", "updates" -> libraryPage(id, sources, jobs, view, device)
     "store-settings" -> storeSettingsPage(jobs)
     "downloads" -> downloadManagementPage(jobs, sources)
@@ -28,7 +29,7 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
         PageBlock.Actions(listOf(PageAction("continue-install", "检查并继续", PluginIcon.EXPORT), PageAction("install-cancel", "返回商店", PluginIcon.CLOSE)))))
     else -> null
 }?.copy(loading = jobs.busy, refreshAction = if (id in setOf("store", "library", "updates", "sources")) "refresh" else null,
-    onEnterAction = when (id) { "store" -> "store-enter"; "library", "updates", "downloads", "package" -> "downloads-enter"; else -> null })
+    onEnterAction = when (id) { "store" -> "store-enter"; "search", "library", "updates", "downloads", "package" -> "downloads-enter"; else -> null })
 internal fun commonStatus(jobs: StoreJobs): List<PageBlock> = buildList {
     if (jobs.busy && !jobs.refreshing && jobs.status.isNotEmpty()) {
         add(PageBlock.Notice(jobs.progress?.let { "${jobs.status} · ${(it.bytes * 100 / it.total).coerceIn(0, 100)}%" } ?: jobs.status))

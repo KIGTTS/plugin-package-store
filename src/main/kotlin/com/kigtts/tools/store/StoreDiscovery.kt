@@ -20,12 +20,11 @@ private fun storeAction(id: String, label: String, symbol: String) = PageAction(
 
 internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {
     val all = sources.entries()
-    val entries = discover(all, view.copy(filter = "all"), jobs.installed, device)
+    val entries = discover(all, view.copy(filter = "all", query = ""), jobs.installed, device)
     val categories = all.map { it.item.category }.distinct().sorted()
     val blocks = listOf(PageBlock.Actions(listOf(
         storeAction("search", "搜索", "search"), storeAction("library", "我的", "apps"), storeAction("downloads", "下载管理", "download"), storeAction("store-settings", "设置", "settings")
     ))) + commonStatus(jobs) + listOfNotNull(
-        view.query.takeIf { it.isNotBlank() }?.let { PageBlock.Text("“$it”的搜索结果") },
         categories.takeIf { it.isNotEmpty() }?.let { PageBlock.Select("分类", listOf(storeAction("category/all", "全部", "category")) + it.map { category -> storeAction("category/${categoryKey(category)}", category, "extension") }, view.category?.let { "category/${categoryKey(it)}" } ?: "category/all", symbol = "category") },
         view.source?.let { key -> PageBlock.Group("来源", listOf(PageBlock.Actions(listOf(storeAction("source-filter/all", "${sources.records().firstOrNull { it.key == key }?.name ?: "当前来源"} · 显示全部来源", "filter_alt_off"))))) }
     ) + if (entries.isEmpty()) listOf(PageBlock.Group("发现插件", listOf(
