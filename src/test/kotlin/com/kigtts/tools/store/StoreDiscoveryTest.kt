@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StoreDiscoveryTest {
+    @Test fun updateEntryShowsCountAndClearsWhenNoUpdatesRemain() {
+        val mine = storeHeaderActions(103).actions.single { it.id == "library" }
+        assertEquals("system_update", mine.symbol)
+        assertEquals("我的插件", mine.label)
+        assertEquals(103, mine.badge!!.count)
+        assertNull(storeHeaderActions().actions.single { it.id == "library" }.badge)
+        val previousCatalog = entry("test.store", release("1.0.0", 1).copy(apiVersion = 25))
+        val installed = mapOf("test.store" to InstalledPackage("test.store", "2.0.0", 2, true, apiVersion = 26))
+        assertFalse("A stale catalog must not count an older API release as an update", previousCatalog.hasUpdate(installed, testDevice))
+    }
     @Test fun discoveryKeepsStableOrderAndMergesMirroredCatalogListings() {
         val older = entry("test.audio", release("1.0.0"), source = "a")
         val newer = entry("test.audio", release("2.0.0", 2), source = "b")

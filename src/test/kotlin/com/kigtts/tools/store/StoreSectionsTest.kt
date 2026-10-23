@@ -29,7 +29,9 @@ class StoreSectionsTest {
         val view = StoreView(query = "unmatched")
         fun page(key: String) = storePage(key, sources, jobs, view, testDevice)!!
         val home = page("store").management!!
-        assertEquals(listOf("分类", "来源", "所有分类"), home.shortcuts.map { it.label })
+        assertEquals(listOf("分类", "来源", "所有插件"), home.shortcuts.map { it.label })
+        assertEquals("open-catalog/${catalogPageId()}", home.shortcuts.last().id)
+        assertEquals("所有插件", page(home.shortcuts.last().id.removePrefix("open-catalog/")).title)
         assertEquals(12, home.items.size); assertNotNull(home.loadMore)
         assertEquals(listOf("全部", "创作", "音频"), home.filters.map { it.label })
         assertEquals("graphic_eq", page("source-sections").management!!.items.first { it.id == a.key }.symbol)

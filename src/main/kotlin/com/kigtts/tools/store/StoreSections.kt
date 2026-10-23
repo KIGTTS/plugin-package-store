@@ -4,14 +4,16 @@ import com.kigtts.plugin.api.*
 
 internal const val STORE_PAGE_SIZE = 12
 internal fun catalogPageId(source: String? = null, category: String? = null) = "catalog/${source ?: "all"}/${category?.let(::categoryKey) ?: "all"}"
-internal fun storeHeaderActions() = PageBlock.Actions(listOf(
-    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的", symbol = "apps"),
+internal fun storeHeaderActions(updates: Int = 0) = PageBlock.Actions(listOf(
+    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的插件", symbol = "system_update", badge = updateBadge(updates)),
     PageAction("downloads", "下载管理", symbol = "download"), PageAction("store-settings", "设置", symbol = "settings")))
+
+internal fun updateBadge(updates: Int): PluginBadge? = updates.takeIf { it > 0 }?.let { PluginBadge(it, "$it 个插件可更新") }
 
 internal fun storeShortcuts() = listOf(
     PageAction("section/categories", "分类", PluginIcon.NONE, "category"),
     PageAction("section/source-sections", "来源", PluginIcon.NONE, "source"),
-    PageAction("section/all-categories", "所有分类", PluginIcon.NONE, "apps"))
+    PageAction("open-catalog/${catalogPageId()}", "所有插件", PluginIcon.NONE, "apps"))
 
 internal fun storeLimit(view: StoreView, id: String) = (view.catalogLimits[id] ?: STORE_PAGE_SIZE).coerceIn(STORE_PAGE_SIZE, 1000)
 internal fun storeLoadMore(view: StoreView, id: String, count: Int): ManagementLoadMore? =

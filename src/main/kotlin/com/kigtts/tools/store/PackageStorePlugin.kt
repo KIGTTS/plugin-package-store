@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.13.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.14.0")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -30,9 +30,12 @@ class PackageStorePlugin : KigPlugin {
             PackageDownloader(environment.storage, HttpsStoreTransport { environment.requirePermission("network") }), ArtifactInspector(environment.storage), ::changed)
         jobs.reloadInstalled() // Preload local state; visible page entry requests the network refresh.
     }
-    override val contributions = PluginContributions(settingsEntries = listOf(
-        SettingsEntry("store", "插件商店", "store", PluginIcon.NONE, summary = "发现、安装与更新插件", symbol = "storefront")),
+    override val contributions get(): PluginContributions {
+        val updates = if (::jobs.isInitialized) discover(sources.entries(), StoreView(filter = "updates"), jobs.installed, device).size else 0
+        return PluginContributions(settingsEntries = listOf(
+        SettingsEntry("store", "插件商店", "store", PluginIcon.NONE, summary = "发现、安装与更新插件", symbol = "storefront", badge = updateBadge(updates))),
         automationActions = listOf("add-source"), sourceAction = "add-source")
+    }
     override fun page(pageId: String, context: PluginContext): PluginPage? {
         if (pageId == "package") sourcePackagePage(sources, jobs, view, device)?.let { return it }
         return storePage(pageId, sources, jobs, view.copy(), device)

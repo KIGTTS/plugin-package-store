@@ -13,7 +13,7 @@ internal fun discover(entries: List<CatalogEntry>, view: StoreView, installed: M
     .sortedWith(compareBy<CatalogEntry> { it.item.category }.thenBy { it.item.name }.thenBy { it.item.id })
 
 internal fun CatalogEntry.hasUpdate(installed: Map<String, InstalledPackage>, device: StoreDevice): Boolean =
-    latest(device)?.let { latest -> installed[item.id]?.let { old -> old.apiVersion != latest.apiVersion ||
+    latest(device)?.let { latest -> installed[item.id]?.let { old -> (latest.apiVersion > old.apiVersion && SemVersion.parse(latest.version) >= SemVersion.parse(old.version)) ||
         SemVersion.parse(latest.version) > SemVersion.parse(old.version) || latest.format == PackageFormat.NATIVE && latest.versionCode > old.versionCode } } == true
 internal fun categoryKey(category: String) = MessageDigest.getInstance("SHA-256").digest(category.toByteArray(Charsets.UTF_8)).take(8).joinToString("") { "%02x".format(it) }
 private fun storeAction(id: String, label: String, symbol: String) = PageAction(id, label, PluginIcon.NONE, symbol)
@@ -26,7 +26,8 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
     val visible = entries.take(storeLimit(view, key))
     val filters = listOf(ManagementFilter("all", "全部", "category/all", view.category == null)) +
         categories.map { ManagementFilter(categoryKey(it), it, "category/${categoryKey(it)}", view.category == it) }
-    return PluginPage("store", "插件商店", listOf(storeHeaderActions()) + commonStatus(jobs),
+    val updates = discover(all, StoreView(filter = "updates"), jobs.installed, device).size
+    return PluginPage("store", "插件商店", listOf(storeHeaderActions(updates)) + commonStatus(jobs),
         ManagementList(key, visible.map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs)
         }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", filters = filters,
