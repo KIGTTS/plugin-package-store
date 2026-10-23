@@ -60,7 +60,7 @@ internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view
 
 internal fun storeSettingsPage(jobs: StoreJobs) = PluginPage("store-settings", "商店设置", commonStatus(jobs) + listOf(
     PageBlock.Group("内容来源", listOf(
-        PageBlock.Actions(listOf(storeAction("sources", "插件来源", "source"), storeAction("source-select", "筛选浏览来源", "filter_alt"))))),
+        PageBlock.Actions(listOf(storeAction("sources", "插件来源", "source"))))),
     PageBlock.Group("下载与存储", listOf(PageBlock.Actions(listOf(storeAction("downloads", "下载管理", "download")))))
 ))
 internal fun downloadsPage(jobs: StoreJobs) = PluginPage("download-storage", "存储空间", commonStatus(jobs) + listOf(

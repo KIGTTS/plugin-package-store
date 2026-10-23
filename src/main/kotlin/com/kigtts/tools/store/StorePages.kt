@@ -4,9 +4,10 @@ import com.kigtts.plugin.api.*
 
 data class StoreView(var query: String = "", var filter: String = "all", var source: String? = null, var offset: Int = 0,
     var selected: CatalogEntry? = null, var selectedVersion: Int? = null, var category: String? = null, var sourceNotice: String = "",
-    var linkTarget: SourcePackageTarget? = null)
+    var linkTarget: SourcePackageTarget? = null, var catalogPages: Map<String, Int> = emptyMap())
 internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage? = when (id) {
-    "store" -> discoveryPage(sources, jobs, view, device)
+    "store" -> storeHomePage(jobs)
+    "categories", "source-sections" -> sectionPage(id, sources, jobs)
     "search" -> storeSearchPage(sources, jobs, view, device)
     "library", "updates" -> libraryPage(id, sources, jobs, view, device)
     "store-settings" -> storeSettingsPage(jobs)
@@ -28,9 +29,13 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
     "install-plan" -> installationPlanPage(id, sources, jobs)
     "await-install" -> PluginPage(id, "等待确认", listOf(PageBlock.Notice("请先完成安装，再返回这里继续。"),
         PageBlock.Actions(listOf(PageAction("continue-install", "检查并继续", PluginIcon.EXPORT), PageAction("install-cancel", "返回商店", PluginIcon.CLOSE)))))
-    else -> null
-}?.copy(loading = jobs.busy, refreshAction = if (id in setOf("store", "library", "updates", "sources")) "refresh" else null,
-    onEnterAction = when (id) { "store" -> "store-enter"; "search", "library", "updates", "downloads", "package" -> "downloads-enter"; else -> null })
+    else -> when {
+        id.startsWith("categories/") -> sectionPage(id, sources, jobs)
+        id.startsWith("catalog/") -> catalogListingPage(id, sources, jobs, view, device)
+        else -> null
+    }
+}?.copy(loading = jobs.busy, refreshAction = if (id in setOf("store", "library", "updates", "sources", "categories", "source-sections") || id.startsWith("categories/") || id.startsWith("catalog/")) "refresh" else null,
+    onEnterAction = when { id == "store" -> "store-enter"; id.startsWith("catalog/") || id in setOf("search", "library", "updates", "downloads", "package") -> "downloads-enter"; else -> null })
 internal fun commonStatus(jobs: StoreJobs): List<PageBlock> = buildList {
     if (jobs.busy && !jobs.refreshing && jobs.status.isNotEmpty()) {
         add(PageBlock.Notice(jobs.progress?.let { "${jobs.status} · ${(it.bytes * 100 / it.total).coerceIn(0, 100)}%" } ?: jobs.status))

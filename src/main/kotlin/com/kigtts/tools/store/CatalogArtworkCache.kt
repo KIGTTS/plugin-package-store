@@ -23,7 +23,7 @@ class CatalogArtworkCache(private val storage: PluginStorage, private val transp
                 transport.fetch(image.url, temporary, image.bytes)
                 currentCoroutineContext().ensureActive()
                 require(temporary.length() == image.bytes && temporary.sha256() == image.sha256) { "图片校验失败" }
-                require(isBitmap(temporary)) { "商店图片需为PNG、JPEG或WebP" }
+                require(isBitmap(temporary) || isSvg(temporary)) { "图片格式暂不支持" }
                 destination.parentFile!!.mkdirs()
                 Files.move(temporary.toPath(), destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             } catch (cancel: CancellationException) { throw cancel }
@@ -35,6 +35,13 @@ class CatalogArtworkCache(private val storage: PluginStorage, private val transp
             val size = it.length()
             if (total > 128L * 1024 * 1024 && it.delete()) total -= size
         }
+    }
+    private fun isSvg(file: File): Boolean {
+        if (file.length() > 512 * 1024) return false
+        val text = file.readText(Charsets.UTF_8).trimStart('\uFEFF', ' ', '\n', '\r', '\t')
+        // Host rendering applies the shared restricted-vector validator; cached bytes are never executed.
+        return !text.contains(Regex("<!\\s*(DOCTYPE|ENTITY)", RegexOption.IGNORE_CASE)) &&
+            (text.startsWith("<svg") || text.startsWith("<?xml") || text.startsWith("<!--")) && text.contains("<svg")
     }
     private fun isBitmap(file: File): Boolean {
         val bytes = file.inputStream().use { input ->
