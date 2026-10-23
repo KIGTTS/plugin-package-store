@@ -22,23 +22,16 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
     val all = sources.entries()
     val entries = discover(all, view.copy(filter = "all", query = ""), jobs.installed, device)
     val categories = all.map { it.item.category }.distinct().sorted()
-    val blocks = listOf(PageBlock.Actions(listOf(
-        storeAction("search", "搜索", "search"), storeAction("library", "我的", "apps"), storeAction("downloads", "下载管理", "download"), storeAction("store-settings", "设置", "settings")
-    ))) + commonStatus(jobs) + listOfNotNull(
-        categories.takeIf { it.isNotEmpty() }?.let { PageBlock.Select("分类", listOf(storeAction("category/all", "全部", "category")) + it.map { category -> storeAction("category/${categoryKey(category)}", category, "extension") }, view.category?.let { "category/${categoryKey(it)}" } ?: "category/all", symbol = "category") },
-        view.source?.let { key -> PageBlock.Group("来源", listOf(PageBlock.Actions(listOf(storeAction("source-filter/all", "${sources.records().firstOrNull { it.key == key }?.name ?: "当前来源"} · 显示全部来源", "filter_alt_off"))))) }
-    ) + if (entries.isEmpty()) listOf(PageBlock.Group("发现插件", listOf(
-        PageBlock.Actions(listOf(storeAction("refresh", "刷新插件目录", "refresh")))
-    ))) else emptyList()
-    val navigation = buildList {
-        if (view.offset > 0) add(storeAction("previous", "上一页", "chevron_left"))
-        if (view.offset + 12 < entries.size) add(storeAction("next", "更多插件", "chevron_right"))
-    }
-    return PluginPage("store", "插件商店", blocks + if (navigation.isEmpty()) emptyList() else listOf(
-        PageBlock.Group("浏览", listOf(PageBlock.Actions(navigation)))),
-        ManagementList("store", entries.drop(view.offset).take(12).map { entry ->
+    val key = "store/${view.category?.let(::categoryKey) ?: "all"}"
+    val visible = entries.take(storeLimit(view, key))
+    val filters = listOf(ManagementFilter("all", "全部", "category/all", view.category == null)) +
+        categories.map { ManagementFilter(categoryKey(it), it, "category/${categoryKey(it)}", view.category == it) }
+    return PluginPage("store", "插件商店", listOf(storeHeaderActions()) + commonStatus(jobs),
+        ManagementList(key, visible.map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs)
-        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", style = ManagementListStyle.CATALOG, itemActions = downloadActions(entries.drop(view.offset).take(12), jobs, device)), onEnterAction = "store-enter")
+        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", filters = filters,
+            style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
+            shortcuts = storeShortcuts(), loadMore = storeLoadMore(view, key, entries.size)), onEnterAction = "store-enter")
 }
 
 internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {

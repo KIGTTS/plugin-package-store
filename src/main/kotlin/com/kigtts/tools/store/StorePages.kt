@@ -4,9 +4,9 @@ import com.kigtts.plugin.api.*
 
 data class StoreView(var query: String = "", var filter: String = "all", var source: String? = null, var offset: Int = 0,
     var selected: CatalogEntry? = null, var selectedVersion: Int? = null, var category: String? = null, var sourceNotice: String = "",
-    var linkTarget: SourcePackageTarget? = null, var catalogPages: Map<String, Int> = emptyMap())
+    var linkTarget: SourcePackageTarget? = null, var catalogLimits: Map<String, Int> = emptyMap())
 internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage? = when (id) {
-    "store" -> storeHomePage(jobs)
+    "store" -> discoveryPage(sources, jobs, view, device)
     "categories", "source-sections" -> sectionPage(id, sources, jobs)
     "search" -> storeSearchPage(sources, jobs, view, device)
     "library", "updates" -> libraryPage(id, sources, jobs, view, device)

@@ -8,12 +8,17 @@ internal fun storeHeaderActions() = PageBlock.Actions(listOf(
     PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的", symbol = "apps"),
     PageAction("downloads", "下载管理", symbol = "download"), PageAction("store-settings", "设置", symbol = "settings")))
 
-internal fun storeHomePage(jobs: StoreJobs) = PluginPage("store", "插件商店", listOf(storeHeaderActions()) + commonStatus(jobs),
-    ManagementList("store-sections", listOf(
-        ManagementItem("categories", "按分类浏览", icon = PluginIcon.NONE, symbol = "category", primaryAction = "section/categories"),
-        ManagementItem("sources", "按来源浏览", icon = PluginIcon.NONE, symbol = "source", primaryAction = "section/source-sections"),
-        ManagementItem("all", "所有插件", icon = PluginIcon.NONE, symbol = "apps", primaryAction = "open-catalog/${catalogPageId()}")
-    ), style = ManagementListStyle.CATALOG))
+internal fun storeShortcuts() = listOf(
+    PageAction("section/categories", "分类", PluginIcon.NONE, "category"),
+    PageAction("section/source-sections", "来源", PluginIcon.NONE, "source"),
+    PageAction("section/all-categories", "所有分类", PluginIcon.NONE, "apps"))
+
+internal fun storeLimit(view: StoreView, id: String) = (view.catalogLimits[id] ?: STORE_PAGE_SIZE).coerceIn(STORE_PAGE_SIZE, 1000)
+internal fun storeLoadMore(view: StoreView, id: String, count: Int): ManagementLoadMore? =
+    storeLimit(view, id).takeIf { it < count && it < 1000 }?.let { ManagementLoadMore("load-more/$id/$it") }
+internal fun appendStoreBatch(view: StoreView, id: String, expected: Int) {
+    if (storeLimit(view, id) == expected) view.catalogLimits = view.catalogLimits + (id to (expected + STORE_PAGE_SIZE).coerceAtMost(1000))
+}
 
 internal fun sourceSectionItem(source: SourceRecord, sources: SourceStore, jobs: StoreJobs): ManagementItem {
     val catalog = sources.catalog(source.key)
@@ -55,15 +60,9 @@ internal fun catalogScope(id: String, sources: SourceStore): StoreView? {
 internal fun catalogListingPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {
     val scope = catalogScope(id, sources) ?: return PluginPage(id, "插件商店", listOf(PageBlock.Notice("这个分区暂时没有可浏览的插件。")))
     val entries = discover(sources.entries(), scope, jobs.installed, device)
-    val pageCount = ((entries.size + STORE_PAGE_SIZE - 1) / STORE_PAGE_SIZE).coerceAtLeast(1)
-    val page = (view.catalogPages[id] ?: 0).coerceIn(0, pageCount - 1)
-    val visible = entries.drop(page * STORE_PAGE_SIZE).take(STORE_PAGE_SIZE)
-    val navigation = buildList {
-        if (page > 0) add(PageAction("catalog-previous/$id", "上一页", symbol = "chevron_left"))
-        if (page + 1 < pageCount) add(PageAction("catalog-next/$id", "下一页", symbol = "chevron_right"))
-    }
+    val visible = entries.take(storeLimit(view, id))
     return PluginPage(id, scope.category ?: scope.source?.let { sources.source(it).name } ?: "所有插件",
-        commonStatus(jobs) + if (navigation.isEmpty()) emptyList() else listOf(PageBlock.Group("第 ${page + 1} / $pageCount 页", listOf(PageBlock.Actions(navigation)))),
-        ManagementList("$id/$page", visible.map { storeItem(it, sources.catalog(it.source.key), jobs) },
-            emptyText = "暂无插件", style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device)))
+        commonStatus(jobs), ManagementList(id, visible.map { storeItem(it, sources.catalog(it.source.key), jobs) },
+            emptyText = "暂无插件", style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
+            loadMore = storeLoadMore(view, id, entries.size)))
 }

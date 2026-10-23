@@ -26,16 +26,23 @@ class StoreSectionsTest {
         }
         val jobs = StoreJobs(environment, sources, testDevice, PackageDownloader(environment.storage, transport), ArtifactInspector(environment.storage), {}, backgroundScope)
         val id = catalogPageId(a.key, "音频")
-        val view = StoreView(query = "unmatched", catalogPages = mapOf(id to 1))
+        val view = StoreView(query = "unmatched")
         fun page(key: String) = storePage(key, sources, jobs, view, testDevice)!!
-        assertEquals(listOf("categories", "sources", "all"), page("store").management!!.items.map { it.id })
+        val home = page("store").management!!
+        assertEquals(listOf("分类", "来源", "所有分类"), home.shortcuts.map { it.label })
+        assertEquals(12, home.items.size); assertNotNull(home.loadMore)
+        assertEquals(listOf("全部", "创作", "音频"), home.filters.map { it.label })
         assertEquals("graphic_eq", page("source-sections").management!!.items.first { it.id == a.key }.symbol)
         assertEquals(listOf("所有插件", "音频"), page("categories/${a.key}").management!!.items.map { it.title })
-        assertEquals(packages.drop(12).take(12).map { it.id }, page(id).management!!.items.map { it.id })
+        assertEquals(packages.take(12).map { it.id }, page(id).management!!.items.map { it.id })
+        appendStoreBatch(view, id, 12)
+        appendStoreBatch(view, id, 12) // Stale duplicate cannot skip a batch.
+        assertEquals(packages.take(24).map { it.id }, page(id).management!!.items.map { it.id })
         assertEquals(12, page(catalogPageId()).management!!.items.size)
         assertEquals(listOf("test.b"), page(catalogPageId(b.key)).management!!.items.map { it.id })
-        view.catalogPages = mapOf(id to 2)
-        assertEquals(3, page(id).management!!.items.size)
+        appendStoreBatch(view, id, 24)
+        assertEquals(27, page(id).management!!.items.size)
+        assertNull(page(id).management!!.loadMore)
         assertEquals("refresh", page(id).refreshAction)
         sources.fetched(a.key, catalog("a.source", *packages.take(2).toTypedArray()))
         assertEquals(packages.take(2).map { it.id }, page(id).management!!.items.map { it.id })

@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.12.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.13.0")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -68,14 +68,10 @@ class PackageStorePlugin : KigPlugin {
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
-            "section" -> { require(id == "categories" || id == "source-sections" || id.startsWith("categories/")); PluginOutcome.OpenPage(id) }
+            "section" -> { require(id in setOf("categories", "all-categories", "source-sections") || id.startsWith("categories/")); PluginOutcome.OpenPage(if (id == "all-categories") "categories" else id) }
             "open-catalog" -> { requireNotNull(catalogScope(id, sources)); PluginOutcome.OpenPage(id) }
-            "catalog-next", "catalog-previous" -> {
-                val scope = requireNotNull(catalogScope(id, sources))
-                val count = discover(sources.entries(), scope, jobs.installed, device).size
-                val last = ((count - 1).coerceAtLeast(0) / STORE_PAGE_SIZE)
-                val current = (view.catalogPages[id] ?: 0).coerceIn(0, last)
-                view.catalogPages = view.catalogPages + (id to (current + if (prefix == "catalog-next") 1 else -1).coerceIn(0, last))
+            "load-more" -> {
+                appendStoreBatch(view, id.substringBeforeLast('/'), id.substringAfterLast('/').toInt())
                 PluginOutcome.RefreshUi
             }
             "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.category }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
