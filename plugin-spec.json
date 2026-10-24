@@ -1,15 +1,15 @@
 {
   "id": "tools.package-store",
   "name": "插件商店",
-  "version": "0.14.1",
-  "versionCode": 19,
+  "version": "0.14.2",
+  "versionCode": 20,
   "entryClass": "com.kigtts.tools.store.PackageStorePlugin",
   "apiVersion": 26,
   "minSdk": 26,
   "runtime": "android-dex",
   "license": "MIT",
   "icon": {
-    "symbol": "widgets"
+    "symbol": "storefront"
   },
   "capabilities": [
     "ui",

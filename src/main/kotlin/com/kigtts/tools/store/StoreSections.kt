@@ -4,8 +4,8 @@ import com.kigtts.plugin.api.*
 
 internal const val STORE_PAGE_SIZE = 12
 internal fun catalogPageId(source: String? = null, category: String? = null) = "catalog/${source ?: "all"}/${category?.let(::categoryKey) ?: "all"}"
-internal fun storeHeaderActions(updates: Int = 0) = PageBlock.Actions(listOf(
-    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的插件", symbol = "upgrade", badge = updateBadge(updates)),
+internal fun storeHeaderActions(updates: Int = 0, downloading: Boolean = false) = PageBlock.Actions(listOf(
+    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的插件", symbol = when { downloading -> "download"; updates > 0 -> "upgrade"; else -> "widgets" }, badge = updateBadge(updates)),
     PageAction("downloads", "下载管理", symbol = "download"), PageAction("store-settings", "设置", symbol = "settings")))
 
 internal fun updateBadge(updates: Int): PluginBadge? = updates.takeIf { it > 0 }?.let { PluginBadge(it, "$it 个插件可更新") }

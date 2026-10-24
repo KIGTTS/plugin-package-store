@@ -10,6 +10,8 @@ class StoreDiscoveryTest {
         assertEquals("我的插件", mine.label)
         assertEquals(103, mine.badge!!.count)
         assertNull(storeHeaderActions().actions.single { it.id == "library" }.badge)
+        assertEquals("widgets", storeHeaderActions().actions.single { it.id == "library" }.symbol)
+        assertEquals("download", storeHeaderActions(2, downloading = true).actions.single { it.id == "library" }.symbol)
         val previousCatalog = entry("test.store", release("1.0.0", 1).copy(apiVersion = 25))
         val installed = mapOf("test.store" to InstalledPackage("test.store", "2.0.0", 2, true, apiVersion = 26))
         assertFalse("A stale catalog must not count an older API release as an update", previousCatalog.hasUpdate(installed, testDevice))

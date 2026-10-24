@@ -30,7 +30,7 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
                 view.category == category, categorySymbol(category))
         }
     val updates = discover(all, StoreView(filter = "updates"), jobs.installed, device).size
-    return PluginPage("store", "插件商店", listOf(storeHeaderActions(updates)) + commonStatus(jobs),
+    return PluginPage("store", "插件商店", listOf(storeHeaderActions(updates, jobs.downloads?.tasks.orEmpty().any { it.phase in setOf(StoreDownloadPhase.QUEUED, StoreDownloadPhase.DOWNLOADING, StoreDownloadPhase.VERIFYING) })) + commonStatus(jobs),
         ManagementList(key, visible.map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs)
         }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", filters = filters,
