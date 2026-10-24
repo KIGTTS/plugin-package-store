@@ -24,8 +24,11 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
     val categories = all.map { it.item.category }.distinct().sorted()
     val key = "store/${view.category?.let(::categoryKey) ?: "all"}"
     val visible = entries.take(storeLimit(view, key))
-    val filters = listOf(ManagementFilter("all", "全部", "category/all", view.category == null)) +
-        categories.map { ManagementFilter(categoryKey(it), it, "category/${categoryKey(it)}", view.category == it) }
+    val filters = listOf(ManagementFilter("all", "全部", "category/all", view.category == null, "apps")) +
+        categories.map { category ->
+            ManagementFilter(categoryKey(category), category, "category/${categoryKey(category)}",
+                view.category == category, categorySymbol(category))
+        }
     val updates = discover(all, StoreView(filter = "updates"), jobs.installed, device).size
     return PluginPage("store", "插件商店", listOf(storeHeaderActions(updates)) + commonStatus(jobs),
         ManagementList(key, visible.map { entry ->
@@ -42,7 +45,7 @@ internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view
     return PluginPage(id, if (updating) "插件更新" else "我的插件", commonStatus(jobs) + listOf(PageBlock.Actions(listOf(
         storeAction("browse", "发现插件", "storefront"), storeAction("refresh", "检查更新", "refresh"), storeAction("store-settings", "设置", "settings"))),
         PageBlock.Group("管理", listOf(PageBlock.Actions(listOfNotNull(
-            if (updating) null else storeAction("updates", if (updates > 0) "插件更新 · $updates" else "插件更新", "system_update"),
+            if (updating) null else storeAction("updates", if (updates > 0) "插件更新 · $updates" else "插件更新", "upgrade"),
             storeAction("manage-plugins", "管理全部插件", "extension")))))),
         ManagementList(id, entries.map { entry -> storeItem(entry, sources.catalog(entry.source.key), jobs,
             entry.item.summary + "\n" + if (updating) "${jobs.installed[entry.item.id]?.version} → ${entry.latest(device)?.version}" else "已安装 ${jobs.installed[entry.item.id]?.version}",

@@ -6,7 +6,7 @@ import org.junit.Test
 class StoreDiscoveryTest {
     @Test fun updateEntryShowsCountAndClearsWhenNoUpdatesRemain() {
         val mine = storeHeaderActions(103).actions.single { it.id == "library" }
-        assertEquals("system_update", mine.symbol)
+        assertEquals("upgrade", mine.symbol)
         assertEquals("我的插件", mine.label)
         assertEquals(103, mine.badge!!.count)
         assertNull(storeHeaderActions().actions.single { it.id == "library" }.badge)

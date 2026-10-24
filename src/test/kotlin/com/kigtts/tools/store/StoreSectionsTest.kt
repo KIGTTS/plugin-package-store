@@ -34,6 +34,7 @@ class StoreSectionsTest {
         assertEquals("所有插件", page(home.shortcuts.last().id.removePrefix("open-catalog/")).title)
         assertEquals(12, home.items.size); assertNotNull(home.loadMore)
         assertEquals(listOf("全部", "创作", "音频"), home.filters.map { it.label })
+        assertEquals(listOf("apps", "category", "graphic_eq"), home.filters.map { it.symbol })
         assertEquals("graphic_eq", page("source-sections").management!!.items.first { it.id == a.key }.symbol)
         assertEquals(listOf("所有插件", "音频"), page("categories/${a.key}").management!!.items.map { it.title })
         assertEquals(packages.take(12).map { it.id }, page(id).management!!.items.map { it.id })

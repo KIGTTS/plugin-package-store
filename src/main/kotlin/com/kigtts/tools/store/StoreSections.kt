@@ -5,7 +5,7 @@ import com.kigtts.plugin.api.*
 internal const val STORE_PAGE_SIZE = 12
 internal fun catalogPageId(source: String? = null, category: String? = null) = "catalog/${source ?: "all"}/${category?.let(::categoryKey) ?: "all"}"
 internal fun storeHeaderActions(updates: Int = 0) = PageBlock.Actions(listOf(
-    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的插件", symbol = "system_update", badge = updateBadge(updates)),
+    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的插件", symbol = "upgrade", badge = updateBadge(updates)),
     PageAction("downloads", "下载管理", symbol = "download"), PageAction("store-settings", "设置", symbol = "settings")))
 
 internal fun updateBadge(updates: Int): PluginBadge? = updates.takeIf { it > 0 }?.let { PluginBadge(it, "$it 个插件可更新") }
@@ -43,7 +43,7 @@ internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs): Plu
         emptyText = "暂无分类", style = ManagementListStyle.CATALOG), header = source?.let { sourceSectionItem(it, sources, jobs).copy(primaryAction = null) })
 }
 
-private fun categorySymbol(category: String) = when (category) {
+internal fun categorySymbol(category: String) = when (category) {
     "音频" -> "graphic_eq"; "外观" -> "palette"; "内容" -> "library_books"; "输入" -> "keyboard"
     "开发" -> "code"; "扩展" -> "extension"; else -> "category"
 }
