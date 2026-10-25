@@ -10,11 +10,11 @@ import java.util.UUID
 @Serializable data class SourceRecord(val key: String = UUID.randomUUID().toString(), val url: String,
     val name: String, val enabled: Boolean = true, val catalogId: String? = null, val lastFetched: Long = 0, val error: String = "")
 @Serializable data class SourceCandidate(val token: String = UUID.randomUUID().toString(), val url: String, val packageId: String? = null)
-@Serializable private data class SourceConfiguration(val records: List<SourceRecord> = emptyList(), val pending: SourceCandidate? = null, val officialSourceSeeded: Boolean = false)
+@Serializable private data class SourceConfiguration(val records: List<SourceRecord> = emptyList(), val pending: SourceCandidate? = null, val officialSourceSeeded: Boolean = false, val resourceSourceSeeded: Boolean = false)
 
 /** Source approval and package publisher trust are independent; adding a source never installs a package. */
 class SourceStore(private val storage: PluginStorage, private val builtinSources: List<SourceRecord> = listOf(SourceRecord(key = "kigtts-official", url = com.kigtts.plugin.api.OfficialPluginSource.URL,
-    name = com.kigtts.plugin.api.OfficialPluginSource.NAME, catalogId = com.kigtts.plugin.api.OfficialPluginSource.ID))) {
+    name = com.kigtts.plugin.api.OfficialPluginSource.NAME, catalogId = com.kigtts.plugin.api.OfficialPluginSource.ID), SourceRecord(key = "kigtts-resources", url = "https://modelscope.cn/datasets/LHTSTUDIO/KIGTTS-Resources/resolve/master/index.json?view=false", name = "KIGTTS 资源", catalogId = "kigtts.resources"))) {
     private val configuration = storage.file("config/sources.json")
     private var state = read<SourceConfiguration>(configuration) ?: SourceConfiguration()
     private val catalogs = linkedMapOf<String, PackageCatalog>()
@@ -22,6 +22,10 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
         if (!state.officialSourceSeeded && builtinSources.isNotEmpty()) {
             state = state.copy(records = state.records + builtinSources.filter { builtin -> state.records.none { it.url == builtin.url || it.key == builtin.key || it.catalogId == builtin.catalogId } }.take((32 - state.records.size).coerceAtLeast(0)), officialSourceSeeded = true)
             save()
+        }
+        if (!state.resourceSourceSeeded && builtinSources.any { it.key == "kigtts-resources" }) {
+            val missing = builtinSources.filter { it.key == "kigtts-resources" && state.records.none { old -> old.key == it.key || old.url == it.url || old.catalogId == it.catalogId } }
+            state = state.copy(records = state.records + missing.take((32 - state.records.size).coerceAtLeast(0)), resourceSourceSeeded = true); save()
         }
         state.records.forEach { source ->
             runCatching { CatalogCodec.parse(storage.file("catalogs/${source.key}.json").readBytes()) }

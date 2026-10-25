@@ -20,7 +20,7 @@ class ArtifactInspector(private val storage: PluginStorage) {
         require(entries.size in 4..4096 && entries.map { it.name.lowercase() }.distinct().size == entries.size) { "包路径重复或数量无效" }
         require(entries.all { safeName(it.name) && it.size in 0..512L * 1024 * 1024 }) { "包包含不合法路径或大小" }
         require(entries.sumOf { it.size } <= 768L * 1024 * 1024) { "包解压后过大" }
-        val manifestName = if (release.format == PackageFormat.NATIVE) "plugin.json" else "manifest.json"
+        val manifestName = when (release.format) { PackageFormat.NATIVE -> "plugin.json"; PackageFormat.LUA -> "manifest.json"; PackageFormat.RESOURCE -> "resource.json" }
         val raw = read(zip, manifestName, 256 * 1024)
         val manifest = PluginJson.parseToJsonElement(raw.toString(Charsets.UTF_8)).jsonObject
         require(manifest.string("id") == entry.item.id && manifest.string("version") == release.version && manifest.getValue("versionCode").jsonPrimitive.int == release.versionCode) { "包 ID 或版本与目录不一致" }
@@ -46,7 +46,7 @@ class ArtifactInspector(private val storage: PluginStorage) {
         if (release.format == PackageFormat.NATIVE) {
             require(manifest.string("runtime") == "android-dex" && "code/classes.dex" in declared)
             require(entries.none { it.name.startsWith("code/oat") })
-        } else {
+        } else if (release.format == PackageFormat.LUA) {
             require(entries.size <= 132 && entries.sumOf { it.size } <= 16 * 1024 * 1024)
             require(raw.size <= 16 * 1024 && payload.size + 1 <= 128 && payload.all { it.size <= 8 * 1024 * 1024 })
             require(payload.any { it.name == "main.lua" && it.size in 1..256 * 1024L })
@@ -55,6 +55,12 @@ class ArtifactInspector(private val storage: PluginStorage) {
             val source = read(zip, "main.lua", 256 * 1024)
             require(source.none { it == 0.toByte() } && source.firstOrNull() != 27.toByte()) { "Lua 包只接受文本源码" }
             Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(source))
+        } else {
+            val resource = PluginJson.decodeFromString<com.kigtts.plugin.api.ResourcePackageManifest>(raw.toString(Charsets.UTF_8))
+            require(resource.schemaVersion == 1 && resource.resourceType == entry.item.resourceType && resource.dependencies == release.dependencies)
+            require(resource.content in declared && safeName(resource.content)) { "资源包缺少内容目录" }
+            val content = PluginJson.decodeFromString<com.kigtts.plugin.api.ResourcePackageContent>(read(zip, resource.content, 4 * 1024 * 1024).toString(Charsets.UTF_8))
+            require(content.schemaVersion == 1)
         }
         payload.forEach { entry -> cancelled(); require(hash(zip, entry, cancelled) == declared.getValue(entry.name)) { "包资源校验失败" } }
         VerifiedArtifact(file, release.format, manifestName)

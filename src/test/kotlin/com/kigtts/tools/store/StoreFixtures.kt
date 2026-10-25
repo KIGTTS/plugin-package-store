@@ -20,10 +20,10 @@ internal data class SignedFixture(val file: File, val entry: CatalogEntry, val r
 internal fun signedFixture(directory: File, format: PackageFormat = PackageFormat.NATIVE, archiveVersion: String = "1.0.0", id: String = "test.plugin",
     extra: Map<String, ByteArray> = emptyMap()): SignedFixture {
     val key = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
-    val manifestName = if (format == PackageFormat.NATIVE) "plugin.json" else "manifest.json"
-    val payload = linkedMapOf(if (format == PackageFormat.NATIVE) "code/classes.dex" to "dex fixture".toByteArray() else "main.lua" to "return {}".toByteArray()) + extra
+    val manifestName = when(format) { PackageFormat.NATIVE -> "plugin.json"; PackageFormat.LUA -> "manifest.json"; PackageFormat.RESOURCE -> "resource.json" }
+    val payload = if (format == PackageFormat.RESOURCE) mapOf("content.json" to "{\"payload\":\"data/cards.kigcards\"}".toByteArray(), "data/cards.kigcards" to "fixture".toByteArray()) + extra else linkedMapOf(if (format == PackageFormat.NATIVE) "code/classes.dex" to "dex fixture".toByteArray() else "main.lua" to "return {}".toByteArray()) + extra
     val manifest = buildJsonObject {
-        put("id", id); put("name", "测试"); put("version", archiveVersion); put("versionCode", 1)
+        if(format == PackageFormat.RESOURCE) { put("schemaVersion", 1); put("resourceType", "QUICK_TEXT"); put("content", "content.json") }; put("id", id); put("name", "测试"); put("version", archiveVersion); put("versionCode", 1)
         put("apiVersion", PLUGIN_API_VERSION); put("minSdk", 26); put("runtime", "android-dex")
         put("permissions", JsonArray(emptyList())); put("files", buildJsonObject { payload.forEach { (name, bytes) -> put(name, bytes.sha256()) } })
     }.toString().toByteArray(Charsets.UTF_8)
@@ -34,5 +34,5 @@ internal fun signedFixture(directory: File, format: PackageFormat = PackageForma
         all.forEach { (name, bytes) -> out.putNextEntry(ZipEntry(name)); out.write(bytes); out.closeEntry() }
     }
     val version = release().copy(format = format, sha256 = file.sha256(), bytes = file.length(), expectedPublisher = key.public.encoded.sha256())
-    return SignedFixture(file, entry(id, version), version)
+    return SignedFixture(file, entry(id, version).let { if(format == PackageFormat.RESOURCE) it.copy(item = it.item.copy(resourceType = com.kigtts.plugin.api.ResourceType.QUICK_TEXT)) else it }, version)
 }

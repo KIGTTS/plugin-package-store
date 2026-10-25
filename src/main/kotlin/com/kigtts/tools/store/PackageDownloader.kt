@@ -19,7 +19,7 @@ class PackageDownloader(private val storage: PluginStorage, private val transpor
         } finally { temporary.delete() }
     }
     suspend fun packageFile(entry: CatalogEntry, release: PackageRelease, progress: (DownloadState) -> Unit): File {
-        val extension = if (release.format == PackageFormat.NATIVE) "kigplugin" else "kiglua"
+        val extension = when (release.format) { PackageFormat.NATIVE -> "kigplugin"; PackageFormat.LUA -> "kiglua"; PackageFormat.RESOURCE -> "kigresource" }
         val file = storage.file("downloads/${release.sha256}.$extension")
         if (file.isFile && file.length() == release.bytes && file.sha256() == release.sha256) return file
         file.delete()

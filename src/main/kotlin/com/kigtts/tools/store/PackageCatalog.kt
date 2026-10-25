@@ -2,10 +2,12 @@ package com.kigtts.tools.store
 
 import com.kigtts.plugin.api.PLUGIN_API_VERSION
 import com.kigtts.plugin.api.PluginJson
+import com.kigtts.plugin.api.ResourceType
 import kotlinx.serialization.Serializable
 import java.net.URI
 
-@Serializable enum class PackageFormat { NATIVE, LUA }
+@Serializable enum class PackageFormat { NATIVE, LUA, RESOURCE }
+@Serializable enum class SourceKind { PLUGINS, RESOURCES }
 @Serializable data class PackageMirror(val name: String, val url: String)
 @Serializable data class PackageRelease(val version: String, val versionCode: Int, val format: PackageFormat,
     val sha256: String, val bytes: Long, val expectedPublisher: String, val mirrors: List<PackageMirror>,
@@ -14,10 +16,14 @@ import java.net.URI
     val permissions: List<String>? = null, val permissionPurposes: Map<String, String> = emptyMap())
 @Serializable data class CatalogPackage(val id: String, val name: String, val summary: String, val releases: List<PackageRelease>,
     val category: String = "扩展", val tags: List<String> = emptyList(), val license: String = "MIT", val homepage: String = "",
-    val icon: CatalogIcon? = null, val description: String = "", val thumbnails: List<String> = emptyList())
+    val icon: CatalogIcon? = null, val description: String = "", val thumbnails: List<String> = emptyList(),
+    val resourceType: ResourceType? = null) {
+    val section get() = resourceType?.label ?: category
+}
 @Serializable data class PackageCatalog(val schemaVersion: Int = 1, val id: String, val name: String,
     val packages: List<CatalogPackage>, val description: String = "", val homepage: String = "", val updatedAt: String = "",
-    val icon: CatalogIcon? = null, val readme: String = "", val assets: Map<String, CatalogImage> = emptyMap())
+    val icon: CatalogIcon? = null, val readme: String = "", val assets: Map<String, CatalogImage> = emptyMap(),
+    val kind: SourceKind = SourceKind.PLUGINS)
 
 object CatalogCodec {
     const val MAX_BYTES = 4 * 1024 * 1024
@@ -29,18 +35,25 @@ object CatalogCodec {
         validate(catalog); return catalog
     }
     fun validate(catalog: PackageCatalog) {
-        require(catalog.schemaVersion == 1) { "源目录格式版本不支持" }
+        require(catalog.schemaVersion in 1..2) { "请更新插件商店以打开这个源" }
+        require(catalog.schemaVersion == 2 || catalog.kind == SourceKind.PLUGINS)
         require(ID.matches(catalog.id) && catalog.name.length in 1..80 && catalog.description.length <= 1000)
         validateArtwork(catalog)
         if (catalog.homepage.isNotEmpty()) https(catalog.homepage)
         require(catalog.packages.size <= 500 && catalog.packages.map { it.id }.distinct().size == catalog.packages.size) { "源内包 ID 重复或数量超过 500" }
         catalog.packages.forEach { item ->
+            require(item.resourceType == null || catalog.schemaVersion == 2)
+            require(catalog.kind != SourceKind.RESOURCES || item.resourceType != null) { "资源源只能包含资源包" }
             require(ID.matches(item.id) && item.name.length in 1..80 && item.summary.length <= 1000 && item.category.length in 1..40)
             require(item.tags.size <= 16 && item.tags.all { it.length in 1..40 } && item.license.length in 1..80)
             if (item.homepage.isNotEmpty()) https(item.homepage)
             require(item.releases.size in 1..64 && item.releases.map { it.versionCode }.distinct().size == item.releases.size) { "包版本号重复或版本数量无效" }
             require(item.releases.map { it.version }.distinct().size == item.releases.size) { "包版本名称重复" }
             item.releases.forEach { release ->
+                require((release.format == PackageFormat.RESOURCE) == (item.resourceType != null)) { "资源类型与安装包格式不一致" }
+                if (release.format == PackageFormat.RESOURCE) {
+                    require(release.apiVersion >= 29 && release.abis.isEmpty() && release.permissions.orEmpty().isEmpty() && release.permissionPurposes.isEmpty())
+                }
                 require(release.version.length in 1..64 && release.versionCode > 0)
                 SemVersion.parse(release.version)
                 require(HASH.matches(release.sha256) && HASH.matches(release.expectedPublisher)) { "包与发布者的 SHA-256 必须填写 64 位小写十六进制值" }

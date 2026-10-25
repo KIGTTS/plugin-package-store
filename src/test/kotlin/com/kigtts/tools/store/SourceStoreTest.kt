@@ -11,8 +11,9 @@ class SourceStoreTest {
     @Test fun officialSourceIsSeededOnceAndRemovalStaysRemoved() {
         val storage = PluginStorage(temporary.root)
         val first = SourceStore(storage)
-        assertEquals(com.kigtts.plugin.api.OfficialPluginSource.URL, first.records().single().url)
-        first.remove(first.records().single().key)
+        assertEquals(com.kigtts.plugin.api.OfficialPluginSource.URL, first.records().single { it.key == "kigtts-official" }.url)
+        assertEquals(2, first.records().size)
+        first.records().forEach { first.remove(it.key) }
         assertTrue(SourceStore(storage).records().isEmpty())
     }
     @Test fun deepLinkOnlyCreatesPendingUntilUserConfirms() {

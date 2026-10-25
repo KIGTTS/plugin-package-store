@@ -2,7 +2,7 @@ package com.kigtts.tools.store
 
 import kotlinx.serialization.json.*
 
-internal fun actualInstalled(metadata: JsonObject, planned: PlannedRelease): Boolean = metadata["plugins"]?.jsonArray.orEmpty().any { element ->
+internal fun actualInstalled(metadata: JsonObject, planned: PlannedRelease): Boolean = planned.release.format != PackageFormat.RESOURCE && metadata["plugins"]?.jsonArray.orEmpty().any { element ->
     runCatching {
         val value = element.jsonObject
         value["installed"]?.jsonPrimitive?.booleanOrNull == true && value["id"]?.jsonPrimitive?.content == planned.entry.item.id &&

@@ -2,6 +2,7 @@ package com.kigtts.tools.store
 
 import com.kigtts.plugin.api.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
 
 /** Serial network work, independently actionable rows, and installation verified from host metadata. */
 internal class StoreDownloads(private val environment: PluginEnvironment, private val sources: SourceStore,
@@ -86,6 +87,10 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
     suspend fun reconcile() {
         val metadata = (environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data)?.value ?: return
         for (task in tasks.filter { it.phase in setOf(StoreDownloadPhase.READY, StoreDownloadPhase.INSTALLING) }) {
+            if (task.resourceToken != null) {
+                reconcileResource(task)
+                continue
+            }
             if (task.plan.ordered.all { actualInstalled(metadata, it) }) update(task.id) { it.copy(phase = StoreDownloadPhase.INSTALLED, detail = "") }
             else if (task.phase == StoreDownloadPhase.INSTALLING) update(task.id) { it.copy(phase = StoreDownloadPhase.READY) }
         }
@@ -100,6 +105,29 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
         update(id) { it.copy(phase = StoreDownloadPhase.INSTALLING) }
         if (native.isNotEmpty()) return PluginOutcome.InstallPackage(resource(native.last().second.file),
             allowDowngrade = current.plan.downgrades.isNotEmpty(), dependencies = native.dropLast(1).map { resource(it.second.file) })
+        val data = missing.firstOrNull { it.second.format == PackageFormat.RESOURCE }
+        if (data != null) {
+            // A receipt belongs to this caller and reports the actual library import, not package display.
+            if (current.resourceToken != null) { reconcileResource(current); return PluginOutcome.RefreshUi }
+            val reply = environment.appBroker?.request(AppCommand.ResourcePackage(source = resource(data.second.file),
+                expectedPublisher = data.first.release.expectedPublisher))
+            val token = (reply as? AppReply.Data)?.value?.get("token")?.jsonPrimitive?.contentOrNull
+            if (token != null) {
+                update(id) { it.copy(resourceToken = token) }
+                scope.launch {
+                    repeat(900) {
+                        delay(1000)
+                        val next = tasks.firstOrNull { it.id == id } ?: return@launch
+                        if (next.resourceToken != token || next.phase != StoreDownloadPhase.INSTALLING) return@launch
+                        reconcileResource(next)
+                    }
+                    update(id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null) }
+                }
+                return PluginOutcome.RefreshUi
+            }
+            update(id) { it.copy(phase = StoreDownloadPhase.READY) }
+            return PluginOutcome.Message((reply as? AppReply.Failure)?.message ?: "暂时无法添加，请重试")
+        }
         val lua = missing.first()
         val result = environment.appBroker?.request(AppCommand.DeliverResource("runtime.lua", resource(inspector.luaResources(lua.second)), "import"))
         if (result is AppReply.Failure || result == null) {
@@ -107,6 +135,17 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
             return PluginOutcome.Message((result as? AppReply.Failure)?.message ?: "请先启用插件编辑器，再继续安装")
         }
         return PluginOutcome.RefreshUi
+    }
+    private suspend fun reconcileResource(task: StoreDownload) {
+        val reply = environment.appBroker?.request(AppCommand.ResourcePackage("status", token = task.resourceToken))
+        val result = (reply as? AppReply.Data)?.value
+        val state = result?.get("state")?.jsonPrimitive?.contentOrNull
+        when (state) {
+            "COMPLETED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.INSTALLED, resourceToken = null, detail = "") }
+            "CANCELLED", "DEFERRED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null) }
+            "FAILED" -> update(task.id) { it.copy(detail = result["message"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
+            else -> if (reply is AppReply.Failure) update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null, detail = reply.message) }
+        }
     }
     @Synchronized fun clearFinished() { tasks = tasks.filterNot { it.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED) }; changed() }
     fun canClearCache() = tasks.all { it.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED, StoreDownloadPhase.CONFIRM) }

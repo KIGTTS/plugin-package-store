@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.14.2")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.15.0")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -71,13 +71,13 @@ class PackageStorePlugin : KigPlugin {
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
-            "section" -> { require(id in setOf("categories", "all-categories", "source-sections") || id.startsWith("categories/")); PluginOutcome.OpenPage(if (id == "all-categories") "categories" else id) }
+            "section" -> { require(id in setOf("categories", "all-categories", "source-sections", "resources", "resource-sources") || id.startsWith("categories/")); PluginOutcome.OpenPage(if (id == "all-categories") "categories" else id) }
             "open-catalog" -> { requireNotNull(catalogScope(id, sources)); PluginOutcome.OpenPage(id) }
             "load-more" -> {
                 appendStoreBatch(view, id.substringBeforeLast('/'), id.substringAfterLast('/').toInt())
                 PluginOutcome.RefreshUi
             }
-            "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.category }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
+            "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.section }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
             "refresh" -> { if (id.isBlank()) jobs.entered() else jobs.refresh(id); PluginOutcome.RefreshUi }
             "source-toggle" -> { check(!jobs.busy); sources.toggle(id); view.offset = 0; PluginOutcome.RefreshUi }
             "source-remove" -> PluginOutcome.Menu("移除此源？", listOf(PageAction("source-remove-confirm/$id", "移除", PluginIcon.CLOSE)))
@@ -130,7 +130,7 @@ class PackageStorePlugin : KigPlugin {
         if (task.phase != StoreDownloadPhase.CONFIRM) return PluginOutcome.RefreshUi
         if (task.plan.ordered.size > 1 || task.plan.downgrades.isNotEmpty()) {
             val names = task.plan.ordered.joinToString("\n") { "• ${it.entry.item.name} ${it.release.version}" }
-            return PluginOutcome.Confirm("确认下载", "将下载以下插件：\n\n$names" +
+            return PluginOutcome.Confirm("确认下载", "将下载以下内容：\n\n$names" +
                 if (task.plan.downgrades.isNotEmpty()) "\n\n包含较早版本，安装前请确认兼容性。" else "",
                 PageAction("download-confirm/${task.id}", "确认并下载", PluginIcon.NONE, "download"), "稍后")
         }

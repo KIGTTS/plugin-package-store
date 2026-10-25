@@ -9,11 +9,12 @@ internal fun downloadActions(entries: List<CatalogEntry>, jobs: StoreJobs, devic
 internal fun downloadAction(entry: CatalogEntry, jobs: StoreJobs, device: StoreDevice,
     release: PackageRelease? = entry.latest(device), detail: Boolean = false): ManagementProgressAction {
     if (release == null || !release.compatible(device)) return ManagementProgressAction("不兼容")
-    val installed = jobs.installed[entry.item.id]
+    val installed = if (entry.item.resourceType == null) jobs.installed[entry.item.id] else null
     if (installed?.let { it.version == release.version && it.apiVersion == release.apiVersion &&
             (release.format == PackageFormat.LUA || it.versionCode == release.versionCode) } == true)
         return ManagementProgressAction("已安装", if (detail) null else "package/${entry.source.key}/${entry.item.id}")
     val task = jobs.downloads?.latest(entry.item.id)?.takeIf { it.root.release.versionCode == release.versionCode }
+    if (entry.item.resourceType != null && task?.phase == StoreDownloadPhase.INSTALLED) return ManagementProgressAction("再次添加", "download-get/${entry.source.key}/${entry.item.id}/${release.versionCode}")
     return task?.button() ?: ManagementProgressAction(when {
         installed == null -> "获取"
         SemVersion.parse(release.version) > SemVersion.parse(installed.version) -> "更新"

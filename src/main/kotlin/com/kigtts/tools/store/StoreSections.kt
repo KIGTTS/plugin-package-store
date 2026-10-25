@@ -13,7 +13,8 @@ internal fun updateBadge(updates: Int): PluginBadge? = updates.takeIf { it > 0 }
 internal fun storeShortcuts() = listOf(
     PageAction("section/categories", "分类", PluginIcon.NONE, "category"),
     PageAction("section/source-sections", "来源", PluginIcon.NONE, "source"),
-    PageAction("open-catalog/${catalogPageId()}", "所有插件", PluginIcon.NONE, "apps"))
+    PageAction("open-catalog/${catalogPageId()}", "所有插件", PluginIcon.NONE, "apps"),
+    PageAction("section/resources", "资源", PluginIcon.NONE, "collections_bookmark"))
 
 internal fun storeLimit(view: StoreView, id: String) = (view.catalogLimits[id] ?: STORE_PAGE_SIZE).coerceIn(STORE_PAGE_SIZE, 1000)
 internal fun storeLoadMore(view: StoreView, id: String, count: Int): ManagementLoadMore? =
@@ -29,13 +30,14 @@ internal fun sourceSectionItem(source: SourceRecord, sources: SourceStore, jobs:
 }
 
 internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs): PluginPage {
+    if (id == "resources" || id == "resource-sources") return resourceSectionsPage(id, sources, jobs)
     if (id == "source-sections") return PluginPage(id, "插件来源", commonStatus(jobs),
         ManagementList(id, sources.records().filter { it.enabled }.map { sourceSectionItem(it, sources, jobs) },
             emptyText = "还没有可浏览的来源", style = ManagementListStyle.CATALOG))
     val key = id.substringAfter('/', "").takeIf { it.isNotEmpty() }
     val source = key?.let { value -> sources.records().firstOrNull { it.key == value && it.enabled } }
     if (key != null && source == null) return PluginPage(id, "插件来源", listOf(PageBlock.Notice("这个来源已停用或移除。")))
-    val categories = sources.entries().filter { key == null || it.source.key == key }.map { it.item.category }.distinct().sorted()
+    val categories = sources.entries().filter { key == null || it.source.key == key }.map { it.item.section }.distinct().sorted()
     return PluginPage(id, source?.name ?: "插件分类", commonStatus(jobs), ManagementList(id,
         listOf(ManagementItem("all", "所有插件", icon = PluginIcon.NONE, symbol = "apps", primaryAction = "open-catalog/${catalogPageId(key)}")) +
             categories.map { category -> ManagementItem(categoryKey(category), category, icon = PluginIcon.NONE,
@@ -45,7 +47,7 @@ internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs): Plu
 
 internal fun categorySymbol(category: String) = when (category) {
     "音频" -> "graphic_eq"; "外观" -> "palette"; "内容" -> "library_books"; "输入" -> "keyboard"
-    "开发" -> "code"; "扩展" -> "extension"; else -> "category"
+    "开发" -> "code"; "扩展" -> "extension"; else -> ResourceType.entries.firstOrNull { it.label == category }?.symbol ?: "category"
 }
 
 internal fun catalogScope(id: String, sources: SourceStore): StoreView? {
@@ -54,8 +56,8 @@ internal fun catalogScope(id: String, sources: SourceStore): StoreView? {
     val source = parts[1].takeUnless { it == "all" }
     if (source != null && sources.records().none { it.key == source && it.enabled }) return null
     val category = if (parts[2] == "all") null else (sources.entries().firstOrNull {
-        (source == null || it.source.key == source) && categoryKey(it.item.category) == parts[2]
-    }?.item?.category ?: return null)
+        (source == null || it.source.key == source) && categoryKey(it.item.section) == parts[2]
+    }?.item?.section ?: ResourceType.entries.firstOrNull { categoryKey(it.label) == parts[2] }?.label ?: return null)
     return StoreView(source = source, category = category)
 }
 

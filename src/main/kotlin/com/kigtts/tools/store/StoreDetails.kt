@@ -5,18 +5,18 @@ import com.kigtts.plugin.api.*
 internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage? {
     val entry = view.selected ?: return null
     val release = entry.item.releases.firstOrNull { it.versionCode == view.selectedVersion } ?: entry.latest(device)
-    val installed = jobs.installed[entry.item.id]
+    val installed = if (entry.item.resourceType == null) jobs.installed[entry.item.id] else null
     val catalog = sources.catalog(entry.source.key)
     return when (id) {
         "package" -> PluginPage(id, entry.item.name, commonStatus(jobs) + listOf(
             PageBlock.Group("介绍", listOf(markdown(entry.item.description.ifBlank { entry.item.summary }, catalog, jobs),
-                thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(entry.item.category) + entry.item.tags).distinct().joinToString(" · "))) +
+                thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(entry.item.section) + entry.item.tags).distinct().joinToString(" · "))) +
                 listOfNotNull(installed?.let { PageBlock.Text("已安装 ${it.version}") }) +
                 listOfNotNull(release?.takeUnless { it.compatible(device) }?.let {
                     PageBlock.Notice("此版本不适用于当前设备，请选择其它版本") })),
             PageBlock.Group("版本动态", listOf(markdown(release?.notes?.ifBlank { "暂无版本说明" } ?: "暂未提供兼容版本", catalog, jobs),
                 PageBlock.Actions(listOf(PageAction("versions", "所有版本", PluginIcon.NONE, "history"))))),
-            permissionDetails(release),
+            if (entry.item.resourceType == null) permissionDetails(release) else PageBlock.Text("添加后可在${entry.item.section}中使用"),
             PageBlock.Actions(listOf(PageAction("package-info", "来源与兼容性", PluginIcon.NONE, "info")))
         ), header = storeItem(entry, catalog, jobs, group = "").copy(primaryAction = null),
             headerAction = downloadAction(entry, jobs, device, release, detail = true))
@@ -26,8 +26,8 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
                 icon = PluginIcon.NONE, selected = version.versionCode == view.selectedVersion,
                 primaryAction = if (version.compatible(device)) "version/${version.versionCode}" else null)
         }))
-        "package-info" -> PluginPage(id, "来源与兼容性", listOf(PageBlock.Group("插件来源", listOf(
-            PageBlock.Text(entry.source.name), markdown(catalog?.readme?.ifBlank { catalog.description } ?: "", catalog, jobs), PageBlock.Text("插件标识：${entry.item.id}"), PageBlock.Text("许可：${entry.item.license}"))),
+        "package-info" -> PluginPage(id, "来源与兼容性", listOf(PageBlock.Group("内容来源", listOf(
+            PageBlock.Text(entry.source.name), markdown(catalog?.readme?.ifBlank { catalog.description } ?: "", catalog, jobs), PageBlock.Text("标识：${entry.item.id}"), PageBlock.Text("许可：${entry.item.license}"))),
             PageBlock.Group("所选版本", buildList {
                 add(PageBlock.Text(release?.let { "${it.version} · Android ${it.minSdk}+ · KIGTTS API ${it.apiVersion}+" } ?: "暂无兼容版本"))
                 release?.let { add(PageBlock.Text("发布者 SHA-256：${it.expectedPublisher}"))

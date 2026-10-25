@@ -4,15 +4,17 @@ import kotlinx.serialization.Serializable
 
 /** Referenced by stable asset ID; display metadata never changes package identity or trust. */
 @Serializable data class CatalogIcon(val symbol: String? = null, val image: String? = null)
-@Serializable data class CatalogImage(val url: String, val sha256: String, val bytes: Long, val alt: String = "")
+@Serializable data class CatalogImage(val url: String, val sha256: String, val bytes: Long, val alt: String = "",
+    val width: Int? = null, val height: Int? = null)
 
 internal fun validateArtwork(catalog: PackageCatalog) {
-    require(catalog.assets.size <= 128 && catalog.assets.values.sumOf { it.bytes.coerceAtLeast(0) } <= 16L * 1024 * 1024) { "源图片超过16MiB或128项" }
+    require(catalog.assets.size <= 128 && catalog.assets.values.sumOf { it.bytes.coerceAtLeast(0) } <= 64L * 1024 * 1024) { "源图片超过64MiB或128项" }
     require(catalog.readme.length <= 32000) { "源介绍过长" }
     catalog.assets.forEach { (id, image) ->
         require(id.matches(Regex("[a-z0-9][a-z0-9._-]{0,63}"))) { "图片标识不合法" }
         CatalogCodec.https(image.url)
-        require(CatalogCodec.HASH.matches(image.sha256) && image.bytes in 1..2L * 1024 * 1024 && image.alt.length <= 160) { "图片需明确SHA-256、大小和有效说明" }
+        require(CatalogCodec.HASH.matches(image.sha256) && image.bytes in 1..8L * 1024 * 1024 && image.alt.length <= 160) { "图片需明确SHA-256、大小和有效说明" }
+        require((image.width == null && image.height == null) || (image.width != null && image.height != null && image.width > 0 && image.height > 0)) { "请同时填写图片宽度和高度" }
     }
     fun icon(value: CatalogIcon?) { value?.let {
         require(it.symbol != null || it.image != null) { "图标需提供symbol或image" }

@@ -7,7 +7,7 @@ data class StoreView(var query: String = "", var filter: String = "all", var sou
     var linkTarget: SourcePackageTarget? = null, var catalogLimits: Map<String, Int> = emptyMap())
 internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage? = when (id) {
     "store" -> discoveryPage(sources, jobs, view, device)
-    "categories", "source-sections" -> sectionPage(id, sources, jobs)
+    "categories", "source-sections", "resources", "resource-sources" -> sectionPage(id, sources, jobs)
     "search" -> storeSearchPage(sources, jobs, view, device)
     "library", "updates" -> libraryPage(id, sources, jobs, view, device)
     "store-settings" -> storeSettingsPage(jobs)
@@ -16,14 +16,14 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
     "sources" -> PluginPage(id, "插件来源", commonStatus(jobs) + listOfNotNull(view.sourceNotice.takeIf { it.isNotBlank() }?.let { PageBlock.Notice(it) }) + listOf(
         PageBlock.Actions(listOf(PageAction("add-source", "添加源", PluginIcon.ADD), PageAction("refresh", "更新全部", PluginIcon.EXPORT)))),
         management = ManagementList("sources", sources.records().map { source ->
-            ManagementItem(source.key, source.name, source.error.ifBlank { sources.catalog(source.key)?.packages?.size?.let { "$it 个插件" } ?: "尚未更新" },
+            ManagementItem(source.key, source.name, source.error.ifBlank { sources.catalog(source.key)?.packages?.size?.let { "$it 项内容" } ?: "尚未更新" },
                 icon = PluginIcon.NONE, image = jobs.image(sources.catalog(source.key), sources.catalog(source.key)?.icon?.image),
                 symbol = sources.catalog(source.key)?.icon?.symbol, primaryAction = "browse-source/${source.key}",
                 actions = listOf(PageAction("refresh/${source.key}", "更新", PluginIcon.EXPORT), PageAction("source-remove/${source.key}", "移除", PluginIcon.CLOSE)),
                 toggle = ManagementToggle(source.enabled, "source-toggle/${source.key}"))
-        }, reorderAction = "sources-reorder", emptyText = "在这里添加和管理插件来源"))
+        }, reorderAction = "sources-reorder", emptyText = "在这里添加和管理内容来源"))
     "source-review" -> sources.pending()?.let { pending -> PluginPage(id, "添加源", listOf(
-        PageBlock.Group("确认源地址", listOf(PageBlock.Text(pending.url), PageBlock.Notice("添加后可浏览这个源的插件，安装前还会请你确认。"),
+        PageBlock.Group("确认源地址", listOf(PageBlock.Text(pending.url), PageBlock.Notice("添加后可浏览这个源的内容。"),
             PageBlock.Actions(listOf(PageAction("source-confirm/${pending.token}", "添加", PluginIcon.ADD), PageAction("source-cancel", "取消", PluginIcon.CLOSE))))))) }
     "package", "versions", "package-info" -> packageDetailsPage(id, sources, jobs, view, device)
     "install-plan" -> installationPlanPage(id, sources, jobs)

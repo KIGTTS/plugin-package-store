@@ -6,14 +6,14 @@ import java.security.MessageDigest
 /** Stable discovery order is independent of which plugin the user last opened or installed. */
 internal fun discover(entries: List<CatalogEntry>, view: StoreView, installed: Map<String, InstalledPackage>, device: StoreDevice): List<CatalogEntry> = entries
     .filter { entry -> (view.source == null || entry.source.key == view.source) &&
-        (view.category == null || entry.item.category == view.category) &&
+        (view.category == null || entry.item.section == view.category) &&
         (view.query.isBlank() || (entry.item.name + " " + entry.item.summary + " " + entry.item.tags.joinToString()).contains(view.query, true)) &&
-        when (view.filter) { "installed" -> entry.item.id in installed; "updates" -> entry.hasUpdate(installed, device); else -> true } }
+        when (view.filter) { "installed" -> entry.item.resourceType == null && entry.item.id in installed; "updates" -> entry.hasUpdate(installed, device); else -> true } }
     .groupBy { it.item.id }.values.map { choices -> choices.maxByOrNull { it.latest(device)?.let { release -> SemVersion.parse(release.version) } ?: SemVersion.parse("0.0.0") }!! }
-    .sortedWith(compareBy<CatalogEntry> { it.item.category }.thenBy { it.item.name }.thenBy { it.item.id })
+    .sortedWith(compareBy<CatalogEntry> { it.item.section }.thenBy { it.item.name }.thenBy { it.item.id })
 
 internal fun CatalogEntry.hasUpdate(installed: Map<String, InstalledPackage>, device: StoreDevice): Boolean =
-    latest(device)?.let { latest -> installed[item.id]?.let { old -> (latest.apiVersion > old.apiVersion && SemVersion.parse(latest.version) >= SemVersion.parse(old.version)) ||
+    (if (item.resourceType != null) null else latest(device))?.let { latest -> installed[item.id]?.let { old -> (latest.apiVersion > old.apiVersion && SemVersion.parse(latest.version) >= SemVersion.parse(old.version)) ||
         SemVersion.parse(latest.version) > SemVersion.parse(old.version) || latest.format == PackageFormat.NATIVE && latest.versionCode > old.versionCode } } == true
 internal fun categoryKey(category: String) = MessageDigest.getInstance("SHA-256").digest(category.toByteArray(Charsets.UTF_8)).take(8).joinToString("") { "%02x".format(it) }
 private fun storeAction(id: String, label: String, symbol: String) = PageAction(id, label, PluginIcon.NONE, symbol)
@@ -21,9 +21,10 @@ private fun storeAction(id: String, label: String, symbol: String) = PageAction(
 internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {
     val all = sources.entries()
     val entries = discover(all, view.copy(filter = "all", query = ""), jobs.installed, device)
-    val categories = all.map { it.item.category }.distinct().sorted()
+    val categories = all.map { it.item.section }.distinct().sorted()
     val key = "store/${view.category?.let(::categoryKey) ?: "all"}"
-    val visible = entries.take(storeLimit(view, key))
+    val grouped = view.category == null
+    val visible = if (grouped) entries.groupBy { it.item.section }.values.flatMap { it.take(3) } else entries.take(storeLimit(view, key))
     val filters = listOf(ManagementFilter("all", "全部", "category/all", view.category == null, "apps")) +
         categories.map { category ->
             ManagementFilter(categoryKey(category), category, "category/${categoryKey(category)}",
@@ -33,9 +34,12 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
     return PluginPage("store", "插件商店", listOf(storeHeaderActions(updates, jobs.downloads?.tasks.orEmpty().any { it.phase in setOf(StoreDownloadPhase.QUEUED, StoreDownloadPhase.DOWNLOADING, StoreDownloadPhase.VERIFYING) })) + commonStatus(jobs),
         ManagementList(key, visible.map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs)
-        }, emptyText = if (all.isEmpty()) "暂无插件，请刷新目录" else "没有匹配的插件", filters = filters,
+        }, emptyText = if (all.isEmpty()) "暂无内容，请添加源或刷新" else "没有匹配的内容", filters = filters,
             style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
-            shortcuts = storeShortcuts(), loadMore = storeLoadMore(view, key, entries.size)), onEnterAction = "store-enter")
+            shortcuts = storeShortcuts(), loadMore = if (grouped) null else storeLoadMore(view, key, entries.size),
+            sectionActions = if (grouped) entries.map { it.item.section }.distinct().associateWith {
+                PageAction("open-catalog/${catalogPageId(category = it)}", "更多", symbol = "chevron_right")
+            } else emptyMap()), onEnterAction = "store-enter")
 }
 
 internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {
