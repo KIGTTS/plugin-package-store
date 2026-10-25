@@ -18,6 +18,7 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     private val configuration = storage.file("config/sources.json")
     private var state = read<SourceConfiguration>(configuration) ?: SourceConfiguration()
     private val catalogs = linkedMapOf<String, PackageCatalog>()
+    private val previews = linkedMapOf<String, SourceRecord>()
     init {
         if (!state.officialSourceSeeded && builtinSources.isNotEmpty()) {
             state = state.copy(records = state.records + builtinSources.filter { builtin -> state.records.none { it.url == builtin.url || it.key == builtin.key || it.catalogId == builtin.catalogId } }.take((32 - state.records.size).coerceAtLeast(0)), officialSourceSeeded = true)
@@ -34,6 +35,15 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     }
     @Synchronized fun records() = state.records
     @Synchronized fun pending() = state.pending
+    @Synchronized fun findUrl(url: String) = state.records.firstOrNull { it.url == url } ?: previews.values.firstOrNull { it.url == url }
+    @Synchronized fun preview(url: String): SourceRecord {
+        val address = CatalogCodec.https(url)
+        findUrl(address)?.let { return it }
+        require(previews.size < 16) { "打开的临时来源较多，请关闭商店后重试" }
+        return SourceRecord(url = address, name = java.net.URI(address).host).also { previews[it.key] = it }
+    }
+    @Synchronized fun allEntries() = entries() + previews.values.flatMap { source -> catalogs[source.key]?.packages.orEmpty().map { CatalogEntry(source, it) } }
+    @Synchronized fun recommends(entry: CatalogEntry) = state.records.none { it.url == entry.source.url || it.catalogId == catalogs[entry.source.key]?.id } && catalogs[entry.source.key]?.linkPolicy?.recommendAfterInstall == true
     @Synchronized fun propose(url: String, packageId: String? = null): SourceCandidate {
         require(packageId == null || CatalogCodec.ID.matches(packageId)) { "插件标识不合法" }
         val normalized = CatalogCodec.https(url)
@@ -44,18 +54,22 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     @Synchronized fun confirm(token: String): SourceRecord {
         val candidate = state.pending?.takeIf { it.token == token } ?: error("确认已失效")
         require(state.records.size < 32) { "最多可添加 32 个源" }
-        val record = SourceRecord(url = candidate.url, name = java.net.URI(candidate.url).host)
+        require(state.records.none { it.url == candidate.url }) { "这个源已经添加过了" }
+        val record = previews.values.firstOrNull { it.url == candidate.url } ?: SourceRecord(url = candidate.url, name = java.net.URI(candidate.url).host)
+        require(record.catalogId == null || state.records.none { it.catalogId == record.catalogId }) { "这个源已通过其它地址添加" }
+        previews.remove(record.key)
+        catalogs[record.key]?.let { atomic(storage.file("catalogs/${record.key}.json"), PluginJson.encodeToString(it)) }
         state = state.copy(records = state.records + record, pending = null); save(); return record
     }
-    @Synchronized fun source(key: String) = state.records.firstOrNull { it.key == key } ?: error("源不存在")
+    @Synchronized fun source(key: String) = state.records.firstOrNull { it.key == key } ?: previews[key] ?: error("源不存在")
     @Synchronized fun catalog(key: String) = catalogs[key]
     @Synchronized fun entries() = state.records.filter { it.enabled }.flatMap { source -> catalogs[source.key]?.packages.orEmpty().map { CatalogEntry(source, it) } }
     @Synchronized fun fetched(key: String, catalog: PackageCatalog) {
         CatalogCodec.validate(catalog)
         val previous = source(key)
         require(previous.catalogId == null || previous.catalogId == catalog.id) { "源 ID 发生变化，请移除后重新确认" }
-        require(state.records.none { it.key != key && it.catalogId == catalog.id }) { "这个源已通过其它地址添加，可在“插件来源”中查看。" }
-        atomic(storage.file("catalogs/$key.json"), PluginJson.encodeToString(catalog))
+        require(key in previews || state.records.none { it.key != key && it.catalogId == catalog.id }) { "这个源已通过其它地址添加，可在“插件来源”中查看。" }
+        if (key !in previews) atomic(storage.file("catalogs/$key.json"), PluginJson.encodeToString(catalog))
         catalogs[key] = catalog
         update(previous.copy(name = catalog.name, catalogId = catalog.id, lastFetched = System.currentTimeMillis(), error = ""))
     }
@@ -69,7 +83,7 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
         source(key); state = state.copy(records = state.records.filter { it.key != key }); catalogs.remove(key)
         storage.file("catalogs/$key.json").delete(); save()
     }
-    private fun update(record: SourceRecord) { state = state.copy(records = state.records.map { if (it.key == record.key) record else it }); save() }
+    private fun update(record: SourceRecord) { if (record.key in previews) { previews[record.key] = record; return }; state = state.copy(records = state.records.map { if (it.key == record.key) record else it }); save() }
     private fun save() = atomic(configuration, PluginJson.encodeToString(state))
     private inline fun <reified T> read(file: File): T? = runCatching {
         require(file.length() <= CatalogCodec.MAX_BYTES); PluginJson.decodeFromString<T>(file.readText(Charsets.UTF_8))

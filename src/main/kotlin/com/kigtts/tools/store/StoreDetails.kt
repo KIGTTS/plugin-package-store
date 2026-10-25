@@ -8,7 +8,7 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
     val installed = if (entry.item.resourceType == null) jobs.installed[entry.item.id] else null
     val catalog = sources.catalog(entry.source.key)
     return when (id) {
-        "package" -> PluginPage(id, entry.item.name, commonStatus(jobs) + listOf(
+        "package" -> PluginPage(id, entry.item.name, commonStatus(jobs) + sourceRecommendation(sources, jobs, entry) + listOf(
             PageBlock.Group("介绍", listOf(markdown(entry.item.description.ifBlank { entry.item.summary }, catalog, jobs),
                 thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(entry.item.section) + entry.item.tags).distinct().joinToString(" · "))) +
                 listOfNotNull(installed?.let { PageBlock.Text("已安装 ${it.version}") }) +

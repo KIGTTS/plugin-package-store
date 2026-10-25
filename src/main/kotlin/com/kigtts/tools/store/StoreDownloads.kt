@@ -20,7 +20,7 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
         val existing = latest(entry.item.id)
         if (existing != null && existing.root.release.versionCode == versionCode && existing.phase !in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED)) return existing
         check(existing == null || existing.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED)) { "此插件已有下载任务，请先完成或取消" }
-        val plan = DependencyResolver(sources.entries(), installed, device).resolve(entry, versionCode)
+        val plan = DependencyResolver(sources.allEntries(), installed, device).resolve(entry, versionCode)
         val next = StoreDownload(plan = plan)
         synchronized(this) {
             check(!closed)

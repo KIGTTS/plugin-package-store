@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.15.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.0")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -52,8 +52,8 @@ class PackageStorePlugin : KigPlugin {
             "store-enter" -> { jobs.downloads?.reconcile(); jobs.entered(); PluginOutcome.RefreshUi }
             "downloads-enter" -> { jobs.downloads?.reconcile(); jobs.reloadInstalled(); PluginOutcome.RefreshUi }
             "add-source" -> context.inputs["url"]?.let { url ->
-                proposeSource(sources, view, url, context.inputs["packageId"]).also {
-                    if (view.linkTarget != null && sources.records().any { it.url == url && it.enabled }) jobs.entered()
+                proposeSource(sources, view, url, context.inputs["packageId"], context.inputs["requireSource"] != "false").also {
+                    if (view.linkTarget != null && sources.findUrl(url)?.enabled == true) jobs.preview(url)
                 }
             } ?: PluginOutcome.TextInput("插件源地址（HTTPS）", "source-address")
             "source-address" -> propose(value)
@@ -67,7 +67,11 @@ class PackageStorePlugin : KigPlugin {
                 PluginOutcome.OpenPage(if (view.linkTarget != null) "package" else "sources")
             }
             "source-cancel" -> { sources.cancelCandidate(); view.linkTarget = null; PluginOutcome.OpenPage("sources") }
-            "target-refresh" -> { view.linkTarget?.let { target -> sources.records().firstOrNull { it.url == target.url && it.enabled }?.let { jobs.entered() } }; PluginOutcome.RefreshUi }
+            "target-refresh" -> { view.linkTarget?.let { jobs.preview(it.url) }; PluginOutcome.RefreshUi }
+            "recommend-source" -> {
+                val entry = requireNotNull(view.selected)
+                proposeSource(sources, view, entry.source.url, entry.item.id)
+            }
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
@@ -94,7 +98,7 @@ class PackageStorePlugin : KigPlugin {
             "package" -> {
                 view.linkTarget = null
                 val sourceKey = id.substringBefore('/'); val packageId = id.substringAfter('/')
-                view.selected = sources.entries().first { it.source.key == sourceKey && it.item.id == packageId }
+                view.selected = sources.allEntries().first { it.source.key == sourceKey && it.item.id == packageId }
                 view.selectedVersion = view.selected!!.latest(device)?.versionCode; PluginOutcome.OpenPage("package")
             }
             "versions", "package-info" -> PluginOutcome.OpenPage(prefix)
@@ -102,7 +106,7 @@ class PackageStorePlugin : KigPlugin {
             "prepare" -> beginDownload(requireNotNull(view.selected), requireNotNull(view.selectedVersion))
             "download-get" -> {
                 val parts = id.split('/')
-                val entry = sources.entries().first { it.source.key == parts[0] && it.item.id == parts[1] }
+                val entry = sources.allEntries().first { it.source.key == parts[0] && it.item.id == parts[1] }
                 beginDownload(entry, parts[2].toInt())
             }
             "download-review" -> reviewDownload(requireNotNull(jobs.downloads).task(id))

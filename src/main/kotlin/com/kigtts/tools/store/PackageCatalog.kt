@@ -20,10 +20,11 @@ import java.net.URI
     val resourceType: ResourceType? = null) {
     val section get() = resourceType?.label ?: category
 }
+@Serializable data class SourceLinkPolicy(val requireAddition: Boolean = false, val recommendAfterInstall: Boolean = false)
 @Serializable data class PackageCatalog(val schemaVersion: Int = 1, val id: String, val name: String,
     val packages: List<CatalogPackage>, val description: String = "", val homepage: String = "", val updatedAt: String = "",
     val icon: CatalogIcon? = null, val readme: String = "", val assets: Map<String, CatalogImage> = emptyMap(),
-    val kind: SourceKind = SourceKind.PLUGINS)
+    val kind: SourceKind = SourceKind.PLUGINS, val linkPolicy: SourceLinkPolicy = SourceLinkPolicy())
 
 object CatalogCodec {
     const val MAX_BYTES = 4 * 1024 * 1024

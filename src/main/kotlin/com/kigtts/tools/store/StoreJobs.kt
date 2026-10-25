@@ -15,6 +15,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     internal var downloads: StoreDownloads? = null
     @Volatile private var active: Job? = null
     private var refreshOnIdle = false
+    private val previewQueue = linkedSetOf<String>()
     private var refreshingAll = false
     private var closed = false
     @Volatile var status: String = ""; private set
@@ -48,9 +49,16 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             changed()
         }
     }
+    @Synchronized fun preview(url: String) {
+        if (closed) return
+        val source = sources.preview(url)
+        if (!source.enabled) return
+        if (busy) { previewQueue += source.key; return }
+        refresh(source.key)
+    }
     @Synchronized fun prepare(entry: CatalogEntry, versionCode: Int) = start("正在检查前置依赖") {
         prepared = null; pendingPlan = null; refreshInstalled()
-        pendingPlan = DependencyResolver(sources.entries(), installed, device).resolve(entry, versionCode)
+        pendingPlan = DependencyResolver(sources.allEntries(), installed, device).resolve(entry, versionCode)
     }
     /** Downloads only the exact dependency/version snapshot the user has reviewed. */
     @Synchronized fun downloadPlan() {
@@ -86,7 +94,9 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             finally {
                 synchronized(this@StoreJobs) {
                     progress = null; status = ""; active = null; refreshingAll = false; refreshing = false
-                    if (refreshOnIdle && !closed) { refreshOnIdle = false; refresh() }
+                    if (!closed && previewQueue.isNotEmpty()) {
+                        val key = previewQueue.first(); previewQueue.remove(key); refresh(key)
+                    } else if (refreshOnIdle && !closed) { refreshOnIdle = false; refresh() }
                 }
                 changed()
             }
@@ -111,6 +121,6 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     }
     fun clearPrepared() { prepared = null; pendingPlan = null; changed() }
     fun luaResources(artifact: VerifiedArtifact) = inspector.luaResources(artifact)
-    @Synchronized fun cancel() { refreshOnIdle = false; active?.cancel(); downloader.cancel(); changed() }
+    @Synchronized fun cancel() { refreshOnIdle = false; previewQueue.clear(); active?.cancel(); downloader.cancel(); changed() }
     suspend fun close() { synchronized(this) { closed = true }; cancel(); active?.join(); scope.cancel() }
 }
