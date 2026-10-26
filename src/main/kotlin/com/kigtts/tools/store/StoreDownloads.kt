@@ -96,6 +96,17 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
         }
     }
     suspend fun install(id: String): PluginOutcome {
+        try { return installPending(id) }
+        catch (cancel: CancellationException) {
+            update(id) { if (it.phase == StoreDownloadPhase.INSTALLING && it.resourceToken == null) it.copy(phase = StoreDownloadPhase.READY) else it }
+            throw cancel
+        } catch (error: Exception) {
+            val message = error.message?.take(180) ?: "添加未完成，请重试"
+            update(id) { if (it.phase == StoreDownloadPhase.INSTALLING && it.resourceToken == null) it.copy(phase = StoreDownloadPhase.READY, detail = message) else it.copy(detail = message) }
+            return PluginOutcome.Message(message)
+        }
+    }
+    private suspend fun installPending(id: String): PluginOutcome {
         val current = task(id)
         check(current.phase in setOf(StoreDownloadPhase.READY, StoreDownloadPhase.INSTALLING)) { "请等待下载完成" }
         val metadata = (environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data)?.value ?: error("暂时无法检查安装状态，请重试")
@@ -119,7 +130,9 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
                         delay(1000)
                         val next = tasks.firstOrNull { it.id == id } ?: return@launch
                         if (next.resourceToken != token || next.phase != StoreDownloadPhase.INSTALLING) return@launch
-                        reconcileResource(next)
+                        try { reconcileResource(next) }
+                        catch (cancel: CancellationException) { throw cancel }
+                        catch (error: Exception) { update(id) { it.copy(detail = "暂时无法读取添加进度，正在重试") } }
                     }
                     update(id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null) }
                 }
@@ -143,7 +156,8 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
         when (state) {
             "COMPLETED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.INSTALLED, resourceToken = null, detail = "") }
             "CANCELLED", "DEFERRED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null) }
-            "FAILED" -> update(task.id) { it.copy(detail = result["message"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
+            "FAILED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null,
+                detail = result["message"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
             else -> if (reply is AppReply.Failure) update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null, detail = reply.message) }
         }
     }

@@ -1,6 +1,8 @@
 package com.kigtts.tools.store
 
 import com.kigtts.plugin.api.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.*
 import kotlinx.serialization.json.*
 import org.junit.*
@@ -60,5 +62,61 @@ class ResourceStoreTest {
         assertNotEquals(task.id, again.id)
         assertEquals(StoreDownloadPhase.CONFIRM, again.phase)
         downloads.close()
+    }
+    @Test fun failedImportAndInterruptedReceiptReadsNeverLeaveResourceWaitingForever() = runTest {
+        for (mode in listOf("request-error", "failed-receipt", "temporary-status-error")) {
+            val directory = File(temp.root, mode).apply { mkdirs() }
+            val fixture = signedFixture(directory, PackageFormat.RESOURCE)
+            var state = "PENDING"
+            var statusFailures = 0
+            val env = object : PluginEnvironment {
+                override val storage = PluginStorage(directory); override val assets = directory
+                override val appBroker = object : AppBroker {
+                    override suspend fun request(command: AppCommand): AppReply {
+                        if (command is AppCommand.ResourcePackage) {
+                            if (command.operation == "install" && mode == "request-error") error("添加未完成")
+                            if (command.operation == "status" && mode == "temporary-status-error" && statusFailures++ == 0) error("连接暂时中断")
+                            return AppReply.Data(buildJsonObject { put("token", "receipt"); put("state", state); put("message", "边框读取失败") })
+                        }
+                        return AppReply.Data(buildJsonObject { put("plugins", JsonArray(emptyList())) })
+                    }
+                }
+                override suspend fun download(url: String, relativePath: String, sha256: String?): File = error("unused")
+            }
+            val sources = SourceStore(env.storage, emptyList())
+            val source = sources.confirm(sources.propose("https://example.invalid/resources.json").token)
+            sources.fetched(source.key, catalog("test.resources", fixture.entry.item).copy(schemaVersion = 2, kind = SourceKind.RESOURCES))
+            val transport = object : StoreTransport {
+                override suspend fun fetch(url: String, destination: File, maximumBytes: Long, progress: (Long) -> Unit) {
+                    destination.parentFile!!.mkdirs(); fixture.file.copyTo(destination); progress(fixture.file.length())
+                }
+            }
+            val workerScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+            val downloads = StoreDownloads(env, sources, testDevice, PackageDownloader(env.storage, transport), ArtifactInspector(env.storage), {}, workerScope)
+            try {
+                val item = sources.entries().single()
+                val task = downloads.offer(item, 1, emptyMap())
+                assertTrue(downloads.install(task.id) is PluginOutcome.Message)
+                assertEquals(StoreDownloadPhase.CONFIRM, downloads.task(task.id).phase)
+                downloads.confirm(task.id)
+                testScheduler.advanceTimeBy(1); runCurrent()
+                val result = downloads.install(task.id)
+                if (mode == "request-error") {
+                    assertTrue(result is PluginOutcome.Message)
+                    assertEquals(StoreDownloadPhase.READY, downloads.task(task.id).phase)
+                } else if (mode == "failed-receipt") {
+                    state = "FAILED"; downloads.reconcile()
+                    assertEquals(StoreDownloadPhase.READY, downloads.task(task.id).phase)
+                    assertNull(downloads.task(task.id).resourceToken)
+                    assertNotNull(downloads.task(task.id).button().action)
+                } else {
+                    testScheduler.advanceTimeBy(1001); runCurrent()
+                    assertEquals(StoreDownloadPhase.INSTALLING, downloads.task(task.id).phase)
+                    state = "COMPLETED"
+                    testScheduler.advanceTimeBy(1001); runCurrent()
+                    assertEquals(StoreDownloadPhase.INSTALLED, downloads.task(task.id).phase)
+                }
+            } finally { downloads.close() }
+        }
     }
 }

@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.2")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -64,7 +64,11 @@ class PackageStorePlugin : KigPlugin {
                 view.linkTarget = candidate.packageId?.let { SourcePackageTarget(source.url, it) }
                 view.selected = null; view.selectedVersion = null
                 jobs.refresh(source.key)
-                PluginOutcome.OpenPage(if (view.linkTarget != null) "package" else "sources")
+                PluginOutcome.OpenPage(when {
+                    view.linkTarget != null -> "package"
+                    source.url.substringBefore('?') == FONT_SOURCE.substringBefore('?') -> catalogPageId(source.key, "字体")
+                    else -> "sources"
+                })
             }
             "source-cancel" -> { sources.cancelCandidate(); view.linkTarget = null; PluginOutcome.OpenPage("sources") }
             "target-refresh" -> { view.linkTarget?.let { jobs.preview(it.url) }; PluginOutcome.RefreshUi }
@@ -75,6 +79,7 @@ class PackageStorePlugin : KigPlugin {
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
+            "font-library" -> openFontLibrary(sources, view)
             "section" -> { require(id in setOf("categories", "all-categories", "source-sections", "resources", "resource-sources") || id.startsWith("categories/")); PluginOutcome.OpenPage(if (id == "all-categories") "categories" else id) }
             "open-catalog" -> { requireNotNull(catalogScope(id, sources)); PluginOutcome.OpenPage(id) }
             "load-more" -> {
