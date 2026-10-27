@@ -13,8 +13,7 @@ internal fun discover(entries: List<CatalogEntry>, view: StoreView, installed: M
     .sortedWith(compareBy<CatalogEntry> { it.item.section }.thenBy { it.item.name }.thenBy { it.item.id })
 
 internal fun CatalogEntry.hasUpdate(installed: Map<String, InstalledPackage>, device: StoreDevice): Boolean =
-    (if (item.resourceType != null) null else latest(device))?.let { latest -> installed[item.id]?.let { old -> (latest.apiVersion > old.apiVersion && SemVersion.parse(latest.version) >= SemVersion.parse(old.version)) ||
-        SemVersion.parse(latest.version) > SemVersion.parse(old.version) || latest.format == PackageFormat.NATIVE && latest.versionCode > old.versionCode } } == true
+    (if (item.resourceType != null) null else latest(device))?.let { release -> installed[item.id]?.let(release::isUpdateFrom) } == true
 internal fun categoryKey(category: String) = MessageDigest.getInstance("SHA-256").digest(category.toByteArray(Charsets.UTF_8)).take(8).joinToString("") { "%02x".format(it) }
 private fun storeAction(id: String, label: String, symbol: String) = PageAction(id, label, PluginIcon.NONE, symbol)
 

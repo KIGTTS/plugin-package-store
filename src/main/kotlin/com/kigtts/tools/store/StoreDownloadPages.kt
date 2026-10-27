@@ -13,11 +13,14 @@ internal fun downloadAction(entry: CatalogEntry, jobs: StoreJobs, device: StoreD
     if (installed?.let { it.version == release.version && it.apiVersion == release.apiVersion &&
             (release.format == PackageFormat.LUA || it.versionCode == release.versionCode) } == true)
         return ManagementProgressAction("已安装", if (detail) null else "package/${entry.source.key}/${entry.item.id}")
-    val task = jobs.downloads?.latest(entry.item.id)?.takeIf { it.root.release.versionCode == release.versionCode }
+    val task = jobs.downloads?.latest(entry.item.id)?.takeIf { task -> task.root.release.let {
+        it.versionCode == release.versionCode && it.version == release.version && it.apiVersion == release.apiVersion &&
+            it.format == release.format && it.sha256 == release.sha256
+    } }
     if (entry.item.resourceType != null && task?.phase == StoreDownloadPhase.INSTALLED) return ManagementProgressAction("再次添加", "download-get/${entry.source.key}/${entry.item.id}/${release.versionCode}")
-    return task?.button() ?: ManagementProgressAction(when {
+    return task?.button(installed) ?: ManagementProgressAction(when {
         installed == null -> "获取"
-        SemVersion.parse(release.version) > SemVersion.parse(installed.version) -> "更新"
+        release.isUpdateFrom(installed) -> "更新"
         else -> "安装"
     }, "download-get/${entry.source.key}/${entry.item.id}/${release.versionCode}")
 }
@@ -32,5 +35,5 @@ internal fun downloadManagementPage(jobs: StoreJobs, sources: SourceStore): Plug
                 actions = if (task.phase in setOf(StoreDownloadPhase.CONFIRM, StoreDownloadPhase.QUEUED, StoreDownloadPhase.DOWNLOADING, StoreDownloadPhase.VERIFYING, StoreDownloadPhase.READY))
                     listOf(PageAction("download-cancel/${task.id}", "取消任务", PluginIcon.CLOSE)) else emptyList())
         }, emptyText = "还没有下载任务", style = ManagementListStyle.CATALOG,
-            itemActions = tasks.associate { it.id to it.button() }), onEnterAction = "downloads-enter")
+            itemActions = tasks.associate { it.id to it.button(jobs.installed[it.root.entry.item.id]) }), onEnterAction = "downloads-enter")
 }
