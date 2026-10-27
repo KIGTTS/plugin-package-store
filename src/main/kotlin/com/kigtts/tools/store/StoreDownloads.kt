@@ -10,12 +10,25 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
     private val changed: () -> Unit, private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)) {
     @Volatile var tasks: List<StoreDownload> = emptyList(); private set
     private var active: Pair<String, Job>? = null
+    private val completedHashes = mutableSetOf<String>()
     private var closed = false
     @Synchronized private fun update(id: String, change: (StoreDownload) -> StoreDownload) {
         tasks = tasks.map { if (it.id == id) change(it) else it }; changed()
     }
     fun task(id: String) = tasks.firstOrNull { it.id == id } ?: error("下载记录已移除，请重新选择插件")
     fun latest(packageId: String) = tasks.lastOrNull { it.root.entry.item.id == packageId }
+    /** Keep a stable action while its confirmation is open; never stack two installers. */
+    fun automaticAction(): String? {
+        val installing = tasks.firstOrNull { it.phase == StoreDownloadPhase.INSTALLING }
+        val next = if (installing != null) installing.takeIf { it.automaticPrompt }
+            else tasks.firstOrNull { it.phase == StoreDownloadPhase.READY && !it.prompted }
+        return next?.let { "download-auto-install/${it.id}" }
+    }
+    suspend fun installAutomatically(id: String): PluginOutcome {
+        if (task(id).prompted) { reconcile(); return PluginOutcome.RefreshUi }
+        if (task(id).phase != StoreDownloadPhase.READY) return PluginOutcome.RefreshUi
+        return install(id, automatic = true)
+    }
     suspend fun offer(entry: CatalogEntry, versionCode: Int, installed: Map<String, InstalledPackage>): StoreDownload {
         val existing = latest(entry.item.id)
         if (existing != null && existing.root.release.versionCode == versionCode && existing.phase !in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED)) return existing
@@ -38,13 +51,14 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
     @Synchronized fun retry(id: String) {
         check(active?.first != id) { "正在取消，请稍后重试" }
         check(task(id).phase in setOf(StoreDownloadPhase.FAILED, StoreDownloadPhase.CANCELLED))
-        update(id) { it.copy(phase = StoreDownloadPhase.QUEUED, detail = "", progress = null) }; startNext()
+        update(id) { it.copy(phase = StoreDownloadPhase.QUEUED, detail = "", progress = null, prompted = false) }; startNext()
     }
     @Synchronized fun cancel(id: String) {
         val current = task(id)
         if (current.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.INSTALLING)) return
         update(id) { it.copy(phase = StoreDownloadPhase.CANCELLED, progress = null) }
         if (active?.first == id) { active?.second?.cancel(); downloader.cancel() }
+        else pruneCompletedCache()
     }
     @Synchronized private fun startNext() {
         if (closed || active != null) return
@@ -78,6 +92,7 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
                     detail = failure.message?.take(180) ?: "下载未完成，请重试") }
             } finally {
                 synchronized(this@StoreDownloads) { active = null; startNext() }
+                pruneCompletedCache()
                 changed()
             }
         }
@@ -91,12 +106,12 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
                 reconcileResource(task)
                 continue
             }
-            if (task.plan.ordered.all { actualInstalled(metadata, it) }) update(task.id) { it.copy(phase = StoreDownloadPhase.INSTALLED, detail = "") }
+            if (task.plan.ordered.all { actualInstalled(metadata, it) }) installed(task.id)
             else if (task.phase == StoreDownloadPhase.INSTALLING) update(task.id) { it.copy(phase = StoreDownloadPhase.READY) }
         }
     }
-    suspend fun install(id: String): PluginOutcome {
-        try { return installPending(id) }
+    suspend fun install(id: String, automatic: Boolean = false): PluginOutcome {
+        try { return installPending(id, automatic) }
         catch (cancel: CancellationException) {
             update(id) { if (it.phase == StoreDownloadPhase.INSTALLING && it.resourceToken == null) it.copy(phase = StoreDownloadPhase.READY) else it }
             throw cancel
@@ -106,12 +121,14 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
             return PluginOutcome.Message(message)
         }
     }
-    private suspend fun installPending(id: String): PluginOutcome {
+    private suspend fun installPending(id: String, automatic: Boolean): PluginOutcome {
         val current = task(id)
         check(current.phase in setOf(StoreDownloadPhase.READY, StoreDownloadPhase.INSTALLING)) { "请等待下载完成" }
+        // Preserve the automatic entry action across the first broker suspension, too.
+        update(id) { it.copy(prompted = true, phase = StoreDownloadPhase.INSTALLING, automaticPrompt = automatic) }
         val metadata = (environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data)?.value ?: error("暂时无法检查安装状态，请重试")
         val missing = current.artifacts.filterNot { actualInstalled(metadata, it.first) }
-        if (missing.isEmpty()) { update(id) { it.copy(phase = StoreDownloadPhase.INSTALLED) }; return PluginOutcome.RefreshUi }
+        if (missing.isEmpty()) { installed(id); return PluginOutcome.RefreshUi }
         val native = missing.filter { it.second.format == PackageFormat.NATIVE }
         update(id) { it.copy(phase = StoreDownloadPhase.INSTALLING) }
         if (native.isNotEmpty()) return PluginOutcome.InstallPackage(resource(native.last().second.file),
@@ -154,12 +171,23 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
         val result = (reply as? AppReply.Data)?.value
         val state = result?.get("state")?.jsonPrimitive?.contentOrNull
         when (state) {
-            "COMPLETED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.INSTALLED, resourceToken = null, detail = "") }
+            "COMPLETED" -> installed(task.id)
             "CANCELLED", "DEFERRED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null) }
             "FAILED" -> update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null,
                 detail = result["message"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
             else -> if (reply is AppReply.Failure) update(task.id) { it.copy(phase = StoreDownloadPhase.READY, resourceToken = null, detail = reply.message) }
         }
+    }
+    @Synchronized private fun installed(id: String) {
+        completedHashes += task(id).plan.ordered.map { it.release.sha256 }
+        update(id) { it.copy(phase = StoreDownloadPhase.INSTALLED, resourceToken = null, detail = "", artifacts = emptyList()) }
+        pruneCompletedCache()
+    }
+    @Synchronized private fun pruneCompletedCache() {
+        val snapshot = tasks
+        val retained = snapshot.filter { it.id == active?.first || it.phase !in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED) }
+            .flatMap { it.plan.ordered }.map { it.release.sha256 }.toSet()
+        completedHashes -= downloader.clearCompleted(completedHashes - retained)
     }
     @Synchronized fun clearFinished() { tasks = tasks.filterNot { it.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED) }; changed() }
     fun canClearCache() = tasks.all { it.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED, StoreDownloadPhase.CONFIRM) }

@@ -11,6 +11,19 @@ import java.io.File
 
 class PackageDownloaderTest {
     @get:Rule val temporary = TemporaryFolder()
+    @Test fun completedCleanupOnlyRemovesRequestedPackageArchivesIncludingLua() {
+        val storage = PluginStorage(temporary.root)
+        val hash = "a".repeat(64)
+        val removed = listOf("kigplugin", "kiglua", "kigresource").map { storage.file("downloads/$hash.$it").apply { parentFile!!.mkdirs(); writeText("package") } }
+        val unrelated = listOf(storage.file("downloads/other.kigplugin"), storage.file("downloads/$hash.svg"), storage.file("tmp/$hash.kigplugin"))
+            .onEach { it.parentFile!!.mkdirs(); it.writeText("keep") }
+        val downloader = PackageDownloader(storage, object : StoreTransport {
+            override suspend fun fetch(url: String, destination: File, maximumBytes: Long, progress: (Long) -> Unit) = error("unused")
+        })
+        assertEquals(setOf(hash), downloader.clearCompleted(setOf(hash)))
+        assertTrue(removed.none { it.exists() })
+        assertTrue(unrelated.all { it.isFile })
+    }
     @Test fun failedMirrorFallsBackAndThenUsesVerifiedCache() = runTest {
         val content = "verified-package".toByteArray(); var calls = 0
         val transport = object : StoreTransport {

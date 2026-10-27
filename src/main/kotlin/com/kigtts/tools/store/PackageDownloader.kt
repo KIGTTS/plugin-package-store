@@ -40,6 +40,10 @@ class PackageDownloader(private val storage: PluginStorage, private val transpor
         error("所有镜像均下载失败或校验不符，请稍后重试")
     }
     fun cancel() = transport.cancel()
+    fun clearCompleted(hashes: Set<String>): Set<String> = hashes.filterTo(mutableSetOf()) { hash ->
+        storage.downloads.listFiles().orEmpty().filter { it.isFile && it.name.substringBeforeLast('.') == hash &&
+            it.extension in setOf("kigplugin", "kiglua", "kigresource") }.all { it.delete() || !it.exists() }
+    }
     fun clearDownloads() {
         storage.downloads.listFiles().orEmpty().filter { it.isFile }.forEach { it.delete() }
     }

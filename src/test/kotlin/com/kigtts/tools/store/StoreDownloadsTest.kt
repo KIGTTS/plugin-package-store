@@ -14,10 +14,14 @@ import java.io.File
 class StoreDownloadsTest {
     @get:Rule val temp = TemporaryFolder()
     private var metadata = buildJsonObject { put("plugins", JsonArray(emptyList())) }
+    private var describeGate: CompletableDeferred<Unit>? = null
     private fun environment() = object : PluginEnvironment {
         override val storage = PluginStorage(temp.root)
         override val assets = temp.root
-        override val appBroker = object : AppBroker { override suspend fun request(command: AppCommand) = AppReply.Data(metadata) }
+        override val appBroker = object : AppBroker { override suspend fun request(command: AppCommand): AppReply {
+            describeGate?.await()
+            return AppReply.Data(metadata)
+        } }
         override suspend fun download(url: String, relativePath: String, sha256: String?): File = error("unused")
     }
     @Test fun queueWaitsForConfirmationAndReconcilesActualInstallWithoutBlockingNextPackage() = runTest {
@@ -38,14 +42,35 @@ class StoreDownloadsTest {
         downloads.confirm(task.id); advanceUntilIdle()
         assertEquals(StoreDownloadPhase.READY, downloads.task(task.id).phase)
         assertEquals(1, fetched)
-        assertTrue(downloads.install(task.id) is PluginOutcome.InstallPackage)
-        downloads.reconcile() // Dismissed installer: still available, never recorded as installed.
+        val automatic = "download-auto-install/${task.id}"
+        assertEquals(automatic, downloads.automaticAction())
+        describeGate = CompletableDeferred()
+        val confirmation = async { downloads.installAutomatically(task.id) }
+        runCurrent()
+        assertEquals(StoreDownloadPhase.INSTALLING, downloads.task(task.id).phase)
+        assertEquals(automatic, downloads.automaticAction()) // Stable even while Describe is suspended.
+        describeGate!!.complete(Unit)
+        assertTrue(confirmation.await() is PluginOutcome.InstallPackage)
+        describeGate = null
+        assertEquals(automatic, downloads.automaticAction()) // Stable while the confirmation is open.
+        val cached = downloads.task(task.id).artifacts.single().second.file
+        assertTrue(cached.isFile)
+        downloads.installAutomatically(task.id) // Host replays entry action on dismissal.
         assertEquals(StoreDownloadPhase.READY, downloads.task(task.id).phase)
+        assertNull(downloads.automaticAction()) // Cancellation must not immediately reopen the dialog.
+        assertTrue(cached.isFile)
+        assertTrue(downloads.install(task.id) is PluginOutcome.InstallPackage) // Manual retry uses the same download.
+        assertNull(downloads.automaticAction()) // A manual confirmation must not start a second automatic entry.
+        assertEquals(1, fetched)
+        assertTrue(cached.isFile) // Showing the installer is not a successful installation.
         metadata = buildJsonObject { put("plugins", buildJsonArray { add(buildJsonObject {
             put("id", "test.first"); put("installed", true); put("version", "1.0.0"); put("versionCode", 1); put("apiVersion", PLUGIN_API_VERSION)
         }) }) }
         downloads.reconcile()
         assertEquals(StoreDownloadPhase.INSTALLED, downloads.task(task.id).phase)
+        assertFalse(cached.exists())
+        assertTrue(downloads.task(task.id).artifacts.isEmpty())
+        assertNull(downloads.automaticAction())
         val next = downloads.offer(sources.entries().last(), 1, emptyMap())
         assertEquals(StoreDownloadPhase.CONFIRM, next.phase)
         downloads.clearFinished()

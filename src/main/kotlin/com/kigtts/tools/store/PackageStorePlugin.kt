@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.4")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.7")
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -37,8 +37,9 @@ class PackageStorePlugin : KigPlugin {
         automationActions = listOf("add-source"), sourceAction = "add-source")
     }
     override fun page(pageId: String, context: PluginContext): PluginPage? {
-        if (pageId == "package") sourcePackagePage(sources, jobs, view, device)?.let { return it }
-        return storePage(pageId, sources, jobs, view.copy(), device)
+        val page = if (pageId == "package") sourcePackagePage(sources, jobs, view, device)
+            ?: storePage(pageId, sources, jobs, view.copy(), device) else storePage(pageId, sources, jobs, view.copy(), device)
+        return page?.let { current -> jobs.downloads?.automaticAction()?.let { current.copy(onEnterAction = it) } ?: current }
     }
     override suspend fun execute(actionId: String, context: PluginContext): PluginOutcome = actions.withLock {
         try { perform(actionId, context).also { changed() } }
@@ -119,6 +120,7 @@ class PackageStorePlugin : KigPlugin {
             "download-retry" -> { requireNotNull(jobs.downloads).retry(id); PluginOutcome.RefreshUi }
             "download-cancel" -> { requireNotNull(jobs.downloads).cancel(id); PluginOutcome.RefreshUi }
             "download-install" -> requireNotNull(jobs.downloads).install(id)
+            "download-auto-install" -> requireNotNull(jobs.downloads).installAutomatically(id)
             "downloads-clear-finished" -> { jobs.downloads?.clearFinished(); PluginOutcome.RefreshUi }
             "show-plan", "continue-install" -> PluginOutcome.OpenPage("downloads")
             "install-cancel" -> { jobs.clearPrepared(); PluginOutcome.OpenPage("store") }

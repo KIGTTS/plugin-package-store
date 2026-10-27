@@ -6,7 +6,8 @@ import java.util.UUID
 internal enum class StoreDownloadPhase { CONFIRM, QUEUED, DOWNLOADING, VERIFYING, READY, INSTALLING, INSTALLED, FAILED, CANCELLED }
 internal data class StoreDownload(val id: String = UUID.randomUUID().toString(), val plan: DependencyPlan,
     val phase: StoreDownloadPhase = StoreDownloadPhase.CONFIRM, val progress: Float? = null,
-    val detail: String = "", val artifacts: List<Pair<PlannedRelease, VerifiedArtifact>> = emptyList(), val resourceToken: String? = null) {
+    val detail: String = "", val artifacts: List<Pair<PlannedRelease, VerifiedArtifact>> = emptyList(), val resourceToken: String? = null,
+    val prompted: Boolean = false, val automaticPrompt: Boolean = false) {
     val root get() = plan.root
     val title get() = root.entry.item.name
     fun button(installed: InstalledPackage? = null): ManagementProgressAction {
@@ -27,8 +28,8 @@ internal data class StoreDownload(val id: String = UUID.randomUUID().toString(),
         StoreDownloadPhase.QUEUED -> "等待下载"
         StoreDownloadPhase.DOWNLOADING -> "正在下载" + (progress?.let { " · ${(it * 100).toInt()}%" } ?: "")
         StoreDownloadPhase.VERIFYING -> "正在检查安装包"
-        StoreDownloadPhase.READY -> "下载完成，等待安装"
-        StoreDownloadPhase.INSTALLING -> "请完成安装确认"
+        StoreDownloadPhase.READY -> if (root.entry.item.resourceType == null) "下载完成，等待安装" else "下载完成，等待添加"
+        StoreDownloadPhase.INSTALLING -> if (root.entry.item.resourceType == null) "请完成安装确认" else "请完成添加确认"
         StoreDownloadPhase.INSTALLED -> if (root.entry.item.resourceType == null) "已安装" else "已添加"
         StoreDownloadPhase.FAILED -> detail.ifBlank { "下载未完成" }
         StoreDownloadPhase.CANCELLED -> "已取消"
