@@ -1,10 +1,10 @@
 {
   "id": "tools.package-store",
   "name": "插件商店",
-  "version": "0.16.7",
-  "versionCode": 29,
+  "version": "0.16.8",
+  "versionCode": 30,
   "entryClass": "com.kigtts.tools.store.PackageStorePlugin",
-  "apiVersion": 32,
+  "apiVersion": 33,
   "minSdk": 26,
   "runtime": "android-dex",
   "license": "MIT",

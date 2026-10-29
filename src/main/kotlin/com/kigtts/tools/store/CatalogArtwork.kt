@@ -3,7 +3,7 @@ package com.kigtts.tools.store
 import kotlinx.serialization.Serializable
 
 /** Referenced by stable asset ID; display metadata never changes package identity or trust. */
-@Serializable data class CatalogIcon(val symbol: String? = null, val image: String? = null)
+@Serializable data class CatalogIcon(val symbol: String? = null, val image: String? = null, val monochrome: Boolean = false)
 @Serializable data class CatalogImage(val url: String, val sha256: String, val bytes: Long, val alt: String = "",
     val width: Int? = null, val height: Int? = null)
 
@@ -18,6 +18,7 @@ internal fun validateArtwork(catalog: PackageCatalog) {
     }
     fun icon(value: CatalogIcon?) { value?.let {
         require(it.symbol != null || it.image != null) { "图标需提供symbol或image" }
+        require(!it.monochrome || it.image != null) { "单色SVG图标需提供image" }
         it.symbol?.let { symbol -> require(symbol.matches(Regex("[a-z0-9_]{1,80}"))) { "Material Symbols名称不合法" } }
         it.image?.let { asset -> require(asset in catalog.assets) { "图标引用的图片未注册" } }
     } }

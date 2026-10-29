@@ -26,7 +26,7 @@ internal fun appendStoreBatch(view: StoreView, id: String, expected: Int) {
 internal fun sourceSectionItem(source: SourceRecord, sources: SourceStore, jobs: StoreJobs): ManagementItem {
     val catalog = sources.catalog(source.key)
     return ManagementItem(source.key, catalog?.name ?: source.name, icon = PluginIcon.NONE,
-        symbol = catalog?.icon?.symbol, image = jobs.image(catalog, catalog?.icon?.image), primaryAction = "section/categories/${source.key}")
+        symbol = catalog?.icon?.symbol, image = jobs.icon(catalog, catalog?.icon), primaryAction = "section/categories/${source.key}")
 }
 
 internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs): PluginPage {

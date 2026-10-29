@@ -17,7 +17,7 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
         PageBlock.Actions(listOf(PageAction("add-source", "添加源", PluginIcon.ADD), PageAction("refresh", "更新全部", PluginIcon.EXPORT)))),
         management = ManagementList("sources", sources.records().map { source ->
             ManagementItem(source.key, source.name, source.error.ifBlank { sources.catalog(source.key)?.packages?.size?.let { "$it 项内容" } ?: "尚未更新" },
-                icon = PluginIcon.NONE, image = jobs.image(sources.catalog(source.key), sources.catalog(source.key)?.icon?.image),
+                icon = PluginIcon.NONE, image = jobs.icon(sources.catalog(source.key), sources.catalog(source.key)?.icon),
                 symbol = sources.catalog(source.key)?.icon?.symbol, primaryAction = "browse-source/${source.key}",
                 actions = listOf(PageAction("refresh/${source.key}", "更新", PluginIcon.EXPORT), PageAction("source-remove/${source.key}", "移除", PluginIcon.CLOSE)),
                 toggle = ManagementToggle(source.enabled, "source-toggle/${source.key}"))
