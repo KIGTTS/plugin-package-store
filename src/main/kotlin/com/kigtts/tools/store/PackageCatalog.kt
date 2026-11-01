@@ -80,7 +80,5 @@ object CatalogCodec {
 data class CatalogEntry(val source: SourceRecord, val item: CatalogPackage)
 data class InstalledPackage(val id: String, val version: String, val versionCode: Int, val enabled: Boolean, val publisher: String? = null,
     val apiVersion: Int = PLUGIN_API_VERSION, val format: PackageFormat = PackageFormat.NATIVE)
-data class StoreDevice(val sdk: Int, val abis: Set<String>, val api: Int = PLUGIN_API_VERSION,
-    val minimumApi: Int = if (api in 10..PLUGIN_API_VERSION) com.kigtts.plugin.api.MIN_PLUGIN_API_VERSION else api)
 internal fun PackageRelease.compatible(device: StoreDevice) = apiVersion in device.minimumApi..device.api && minSdk <= device.sdk && (abis.isEmpty() || abis.any { it in device.abis })
 internal fun CatalogEntry.latest(device: StoreDevice) = item.releases.filter { it.compatible(device) && SemVersion.parse(it.version).pre.isEmpty() }.maxByOrNull { SemVersion.parse(it.version) }

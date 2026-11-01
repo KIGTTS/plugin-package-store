@@ -107,6 +107,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     }
     private suspend fun refreshInstalled() {
         val reply = environment.appBroker?.request(AppCommand.Describe) as? AppReply.Data ?: return
+        device.updateHostCompatibility(reply.value)
         installed = reply.value["plugins"]?.jsonArray.orEmpty().mapNotNull { item ->
             runCatching {
                 val value = item.jsonObject
