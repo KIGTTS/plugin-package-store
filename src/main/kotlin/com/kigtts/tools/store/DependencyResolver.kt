@@ -8,6 +8,7 @@ data class DependencyPlan(val ordered: List<PlannedRelease>, val root: PlannedRe
 class DependencyResolver(private val entries: List<CatalogEntry>, private val installed: Map<String, InstalledPackage>, private val device: StoreDevice) {
     private var attempts = 0
     fun resolve(root: CatalogEntry, versionCode: Int): DependencyPlan {
+        require(installed[root.item.id]?.builtin != true) { "此功能已内置，请更新主程序" }
         attempts = 0
         val release = root.item.releases.single { it.versionCode == versionCode }
         require(release.compatible(device)) { "所选版本不兼容此设备" }
@@ -52,6 +53,10 @@ class DependencyResolver(private val entries: List<CatalogEntry>, private val in
         val unresolved = constraints.keys.firstOrNull { it !in selected } ?: return selected
         val ranges = constraints.getValue(unresolved)
         val old = installed[unresolved]
+        if (old?.builtin == true) {
+            if (ranges.any { !it.contains(SemVersion.parse(old.version)) }) return null
+            return search(selected, LinkedHashMap(constraints).also { it.remove(unresolved) }, expanded)
+        }
         val candidates = entries.filter { it.item.id == unresolved }.flatMap { entry ->
             entry.item.releases.filter { it.compatible(device) && ranges.all { range -> range.contains(SemVersion.parse(it.version)) } }.map { PlannedRelease(entry, it) }
         }.distinctBy { Triple(it.release.version, it.release.sha256, it.release.expectedPublisher) }

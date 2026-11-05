@@ -10,6 +10,7 @@ internal fun downloadAction(entry: CatalogEntry, jobs: StoreJobs, device: StoreD
     release: PackageRelease? = entry.latest(device), detail: Boolean = false): ManagementProgressAction {
     if (release == null || !release.compatible(device)) return ManagementProgressAction("不兼容")
     val installed = if (entry.item.resourceType == null) jobs.installed[entry.item.id] else null
+    if (installed?.builtin == true) return ManagementProgressAction("已内置")
     if (installed?.let { it.version == release.version && it.apiVersion == release.apiVersion &&
             (release.format == PackageFormat.LUA || it.versionCode == release.versionCode) } == true)
         return ManagementProgressAction("已安装", if (detail) null else "package/${entry.source.key}/${entry.item.id}")

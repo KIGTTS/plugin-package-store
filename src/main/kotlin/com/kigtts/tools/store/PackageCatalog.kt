@@ -79,6 +79,6 @@ object CatalogCodec {
 }
 data class CatalogEntry(val source: SourceRecord, val item: CatalogPackage)
 data class InstalledPackage(val id: String, val version: String, val versionCode: Int, val enabled: Boolean, val publisher: String? = null,
-    val apiVersion: Int = PLUGIN_API_VERSION, val format: PackageFormat = PackageFormat.NATIVE)
+    val apiVersion: Int = PLUGIN_API_VERSION, val format: PackageFormat = PackageFormat.NATIVE, val builtin: Boolean = false)
 internal fun PackageRelease.compatible(device: StoreDevice) = apiVersion in device.minimumApi..device.api && minSdk <= device.sdk && (abis.isEmpty() || abis.any { it in device.abis })
 internal fun CatalogEntry.latest(device: StoreDevice) = item.releases.filter { it.compatible(device) && SemVersion.parse(it.version).pre.isEmpty() }.maxByOrNull { SemVersion.parse(it.version) }

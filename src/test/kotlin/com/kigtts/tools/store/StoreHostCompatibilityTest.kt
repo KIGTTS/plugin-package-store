@@ -16,6 +16,21 @@ import java.io.File
 class StoreHostCompatibilityTest {
     @get:Rule val temp = TemporaryFolder()
 
+    @Test fun builtinReadingIsHiddenAndSatisfiesEngineDependencyWithoutDownload() {
+        val device = StoreDevice(35, setOf("arm64-v8a"))
+        val reading = entry("service.speech-synthesis", release().copy(version = "0.8.5"))
+        val engine = entry("test.cloud-engine", release().copy(dependencies = mapOf(reading.item.id to ">=0.8.0")))
+        val installed = mapOf(reading.item.id to InstalledPackage(reading.item.id, "0.8.5", 0, true, builtin = true))
+        assertEquals(listOf(engine), discover(listOf(reading, engine), StoreView(), installed, device))
+        val plan = DependencyResolver(listOf(reading, engine), installed, device).resolve(engine, 1)
+        assertEquals(listOf(engine.item.id), plan.ordered.map { it.entry.item.id })
+        assertEquals(listOf(reading.item.id), plan.retained.map { it.id })
+        assertTrue(runCatching { DependencyResolver(listOf(reading), installed, device).resolve(reading, 1) }.isFailure)
+        val incompatible = engine.copy(item = engine.item.copy(releases = listOf(engine.item.releases.single().copy(
+            dependencies = mapOf(reading.item.id to ">=9.0.0")))))
+        assertTrue(runCatching { DependencyResolver(listOf(reading, incompatible), installed, device).resolve(incompatible, 1) }.isFailure)
+    }
+
     @Test fun newerHostSupportsPhotoStickersWithoutDroppingOlderPlugins() {
         val device = StoreDevice(36, setOf("arm64-v8a"), api = 33)
         val photo = release().copy(apiVersion = 34, format = PackageFormat.RESOURCE)

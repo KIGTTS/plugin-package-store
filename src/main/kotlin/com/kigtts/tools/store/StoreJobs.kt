@@ -116,7 +116,8 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
                     value["versionCode"]?.jsonPrimitive?.intOrNull ?: 0, value["enabled"]?.jsonPrimitive?.booleanOrNull ?: false,
                     value["publisherSha256"]?.jsonPrimitive?.contentOrNull ?: value["publisher"]?.jsonPrimitive?.contentOrNull,
                     value["apiVersion"]?.jsonPrimitive?.intOrNull ?: PLUGIN_API_VERSION,
-                    if (value["kind"]?.jsonPrimitive?.content == "lua") PackageFormat.LUA else PackageFormat.NATIVE)
+                    if (value["kind"]?.jsonPrimitive?.content == "lua") PackageFormat.LUA else PackageFormat.NATIVE,
+                    value["builtin"]?.jsonPrimitive?.booleanOrNull == true)
             }.getOrNull()
         }.associateBy { it.id }
     }

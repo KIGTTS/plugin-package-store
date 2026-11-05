@@ -5,7 +5,7 @@ import java.security.MessageDigest
 
 /** Stable discovery order is independent of which plugin the user last opened or installed. */
 internal fun discover(entries: List<CatalogEntry>, view: StoreView, installed: Map<String, InstalledPackage>, device: StoreDevice): List<CatalogEntry> = entries
-    .filter { entry -> (view.source == null || entry.source.key == view.source) &&
+    .filter { entry -> installed[entry.item.id]?.builtin != true && (view.source == null || entry.source.key == view.source) &&
         (view.category == null || entry.item.section == view.category) &&
         (view.query.isBlank() || (entry.item.name + " " + entry.item.summary + " " + entry.item.tags.joinToString()).contains(view.query, true)) &&
         when (view.filter) { "installed" -> entry.item.resourceType == null && entry.item.id in installed; "updates" -> entry.hasUpdate(installed, device); else -> true } }
@@ -52,7 +52,7 @@ internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view
             storeAction("manage-plugins", "管理全部插件", "extension")))))),
         ManagementList(id, entries.map { entry -> storeItem(entry, sources.catalog(entry.source.key), jobs,
             entry.item.summary + "\n" + if (updating) "${jobs.installed[entry.item.id]?.version} → ${entry.latest(device)?.version}" else "已安装 ${jobs.installed[entry.item.id]?.version}",
-            group = "已安装") } + if (updating) emptyList() else jobs.installed.values.filter { installed -> entries.none { it.item.id == installed.id } }.sortedBy { it.id }.map { installed ->
+            group = "已安装") } + if (updating) emptyList() else jobs.installed.values.filter { installed -> !installed.builtin && entries.none { it.item.id == installed.id } }.sortedBy { it.id }.map { installed ->
                 ManagementItem(installed.id, installed.id, "已安装 ${installed.version} · 不在当前来源中", icon = PluginIcon.MENU, primaryAction = "manage-plugins")
             },
             emptyText = if (updating) "当前目录中的插件均已是最新版本" else "安装喜欢的插件后，会在这里找到它们", style = ManagementListStyle.CATALOG, itemActions = downloadActions(entries, jobs, device)))
