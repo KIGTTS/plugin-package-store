@@ -35,7 +35,7 @@ class StoreHeaderSearchTest {
         assertFalse(detail.blocks.filterIsInstance<PageBlock.Group>().flatMap { it.children }.filterIsInstance<PageBlock.Actions>()
             .flatMap { it.actions }.any { it.id == "prepare" })
         val search = storePage("search", sources, jobs, view.copy(query = "test.plugin"), testDevice)!!
-        assertEquals(PluginSearch("test.plugin", "search-save", "搜索插件"), search.search)
+        assertEquals(PluginSearch("test.plugin", "search-save", "搜索插件与资源"), search.search)
         assertEquals(listOf("test.plugin"), search.management!!.items.map { it.id })
         assertEquals(1, storePage("store", sources, jobs, view.copy(query = "unmatched"), testDevice)!!.management!!.items.size)
         assertEquals(1, storePage(catalogPageId(), sources, jobs, view.copy(query = "unmatched"), testDevice)!!.management!!.items.size)
