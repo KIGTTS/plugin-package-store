@@ -112,7 +112,9 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             runCatching {
                 val value = item.jsonObject
                 if (value["installed"]?.jsonPrimitive?.booleanOrNull != true) return@runCatching null
-                InstalledPackage(value.getValue("id").jsonPrimitive.content, value.getValue("version").jsonPrimitive.content,
+                val id = value.getValue("id").jsonPrimitive.content
+                if (isPausedPackage(id)) return@runCatching null
+                InstalledPackage(id, value.getValue("version").jsonPrimitive.content,
                     value["versionCode"]?.jsonPrimitive?.intOrNull ?: 0, value["enabled"]?.jsonPrimitive?.booleanOrNull ?: false,
                     value["publisherSha256"]?.jsonPrimitive?.contentOrNull ?: value["publisher"]?.jsonPrimitive?.contentOrNull,
                     value["apiVersion"]?.jsonPrimitive?.intOrNull ?: PLUGIN_API_VERSION,

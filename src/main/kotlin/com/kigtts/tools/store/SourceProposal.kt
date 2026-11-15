@@ -5,6 +5,7 @@ import com.kigtts.plugin.api.PluginOutcome
 /** A repeated link opens the existing list, so the host acknowledges it without a failure toast. */
 internal fun proposeSource(sources: SourceStore, view: StoreView, url: String, packageId: String? = null, requireAddition: Boolean = true): PluginOutcome {
     require(packageId == null || CatalogCodec.ID.matches(packageId)) { "插件标识不合法" }
+    require(packageId == null || !isPausedPackage(packageId)) { "此插件暂不可用" }
     val address = CatalogCodec.https(url)
     view.linkTarget = packageId?.let { SourcePackageTarget(address, it) }
     view.selected = null; view.selectedVersion = null

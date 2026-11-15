@@ -42,10 +42,11 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
         require(previews.size < 16) { "打开的临时来源较多，请关闭商店后重试" }
         return SourceRecord(url = address, name = java.net.URI(address).host).also { previews[it.key] = it }
     }
-    @Synchronized fun allEntries() = entries() + previews.values.flatMap { source -> catalogs[source.key]?.packages.orEmpty().map { CatalogEntry(source, it) } }
+    @Synchronized fun allEntries() = entries() + previews.values.flatMap(::visibleEntries)
     @Synchronized fun recommends(entry: CatalogEntry) = state.records.none { it.url == entry.source.url || it.catalogId == catalogs[entry.source.key]?.id } && catalogs[entry.source.key]?.linkPolicy?.recommendAfterInstall == true
     @Synchronized fun propose(url: String, packageId: String? = null): SourceCandidate {
         require(packageId == null || CatalogCodec.ID.matches(packageId)) { "插件标识不合法" }
+        require(packageId == null || !isPausedPackage(packageId)) { "此插件暂不可用" }
         val normalized = CatalogCodec.https(url)
         require(state.records.none { it.url == normalized }) { "这个源已经添加过了，可在“插件来源”中查看。" }
         return SourceCandidate(url = normalized, packageId = packageId).also { state = state.copy(pending = it); save() }
@@ -53,6 +54,7 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     @Synchronized fun cancelCandidate() { state = state.copy(pending = null); save() }
     @Synchronized fun confirm(token: String): SourceRecord {
         val candidate = state.pending?.takeIf { it.token == token } ?: error("确认已失效")
+        require(candidate.packageId == null || !isPausedPackage(candidate.packageId)) { "此插件暂不可用" }
         require(state.records.size < 32) { "最多可添加 32 个源" }
         require(state.records.none { it.url == candidate.url }) { "这个源已经添加过了" }
         val record = previews.values.firstOrNull { it.url == candidate.url } ?: SourceRecord(url = candidate.url, name = java.net.URI(candidate.url).host)
@@ -62,8 +64,9 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
         state = state.copy(records = state.records + record, pending = null); save(); return record
     }
     @Synchronized fun source(key: String) = state.records.firstOrNull { it.key == key } ?: previews[key] ?: error("源不存在")
-    @Synchronized fun catalog(key: String) = catalogs[key]
-    @Synchronized fun entries() = state.records.filter { it.enabled }.flatMap { source -> catalogs[source.key]?.packages.orEmpty().map { CatalogEntry(source, it) } }
+    @Synchronized fun catalog(key: String) = catalogs[key]?.let { it.copy(packages = it.packages.filterNot { item -> isPausedPackage(item.id) }) }
+    @Synchronized fun entries() = state.records.filter { it.enabled }.flatMap(::visibleEntries)
+    private fun visibleEntries(source: SourceRecord) = catalog(source.key)?.packages.orEmpty().map { CatalogEntry(source, it) }
     @Synchronized fun fetched(key: String, catalog: PackageCatalog) {
         CatalogCodec.validate(catalog)
         val previous = source(key)

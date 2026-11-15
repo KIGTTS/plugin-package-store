@@ -30,6 +30,7 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
         return install(id, automatic = true)
     }
     suspend fun offer(entry: CatalogEntry, versionCode: Int, installed: Map<String, InstalledPackage>): StoreDownload {
+        require(!isPausedPackage(entry.item.id)) { "此插件暂不可用" }
         val existing = latest(entry.item.id)
         if (existing != null && existing.root.release.versionCode == versionCode && existing.phase !in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED)) return existing
         check(existing == null || existing.phase in setOf(StoreDownloadPhase.INSTALLED, StoreDownloadPhase.CANCELLED, StoreDownloadPhase.FAILED)) { "此插件已有下载任务，请先完成或取消" }

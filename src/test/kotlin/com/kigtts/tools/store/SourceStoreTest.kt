@@ -49,4 +49,23 @@ class SourceStoreTest {
         store.fetched(a.key, catalog("test.source", entry("test.plugin", release()).item)); store.toggle(a.key)
         assertTrue(store.entries().isEmpty()); assertEquals(1, store.records().size)
     }
+    @Test fun pausedCloudSharingIsHiddenFromCachedAndPreviewCatalogsAndCannotBeOpenedByLink() {
+        val storage = PluginStorage(temporary.root)
+        val store = SourceStore(storage, emptyList())
+        val url = "https://example.invalid/source.json"
+        val source = store.confirm(store.propose(url).token)
+        val cloud = entry("cloud.sharing", release()).item
+        val other = entry("test.plugin", release()).item
+        store.fetched(source.key, catalog("test.source", cloud, other))
+        val restored = SourceStore(storage, emptyList())
+        assertEquals(listOf("test.plugin"), restored.catalog(source.key)?.packages?.map { it.id })
+        assertEquals(listOf("test.plugin"), restored.entries().map { it.item.id })
+        val preview = restored.preview("https://example.invalid/preview.json")
+        restored.fetched(preview.key, catalog("test.preview", cloud))
+        assertEquals(listOf("test.plugin"), restored.allEntries().map { it.item.id })
+        assertThrows(IllegalArgumentException::class.java) {
+            proposeSource(restored, StoreView(), url, "cloud.sharing", requireAddition = false)
+        }
+        assertNull(restored.pending())
+    }
 }
