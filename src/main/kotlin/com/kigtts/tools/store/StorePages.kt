@@ -26,7 +26,7 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
         PageBlock.Group(copy.text("confirm_source"), listOf(PageBlock.Text(pending.url), PageBlock.Notice(copy.text("source_explanation")),
             PageBlock.Actions(listOf(PageAction("source-confirm/${pending.token}", copy.text("add"), PluginIcon.ADD), PageAction("source-cancel", copy.text("cancel"), PluginIcon.CLOSE))))))) }
     "package", "versions", "package-info" -> packageDetailsPage(id, sources, jobs, view, device, copy)
-    "install-plan" -> installationPlanPage(id, sources, jobs)
+    "install-plan" -> installationPlanPage(id, sources, jobs, copy)
     "await-install" -> PluginPage(id, copy.text("wait_confirm"), listOf(PageBlock.Notice(copy.text("install_first")),
         PageBlock.Actions(listOf(PageAction("continue-install", copy.text("continue"), PluginIcon.EXPORT), PageAction("install-cancel", copy.text("return_store"), PluginIcon.CLOSE)))))
     else -> when {

@@ -77,5 +77,15 @@
   "detail_installed": "已安装 {version}",
   "resource_available": "添加后可在{section}中使用",
   "identifier": "标识：{id}",
-  "license": "许可：{license}"
+  "license": "许可：{license}",
+  "install_plan": "检查安装计划",
+  "install_resolving": "正在检查所需插件…",
+  "install_choose": "请先选择一个版本",
+  "install_requires": "此插件需要以下前置插件，将在确认后一起下载",
+  "install_older": "包含较早版本：{packages}",
+  "install_cancel_download": "取消下载",
+  "install_plugin": "安装插件",
+  "install_confirm_download": "确认并下载",
+  "install_dependency": "前置插件",
+  "install_group": "本次安装"
 }

@@ -77,5 +77,15 @@
   "detail_installed": "설치됨 {version}",
   "resource_available": "추가 후 {section}에서 사용할 수 있어요",
   "identifier": "ID: {id}",
-  "license": "라이선스: {license}"
+  "license": "라이선스: {license}",
+  "install_plan": "설치 계획 확인",
+  "install_resolving": "필요한 플러그인을 확인하는 중…",
+  "install_choose": "먼저 버전을 선택하세요.",
+  "install_requires": "확인하면 필요한 플러그인을 함께 다운로드합니다.",
+  "install_older": "이전 버전 포함: {packages}",
+  "install_cancel_download": "다운로드 취소",
+  "install_plugin": "플러그인 설치",
+  "install_confirm_download": "확인 후 다운로드",
+  "install_dependency": "필수 플러그인",
+  "install_group": "이번에 설치"
 }

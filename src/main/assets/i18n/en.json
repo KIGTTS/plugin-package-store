@@ -77,5 +77,15 @@
   "detail_installed": "Installed {version}",
   "resource_available": "Find it under {section} after adding it",
   "identifier": "ID: {id}",
-  "license": "License: {license}"
+  "license": "License: {license}",
+  "install_plan": "Review install plan",
+  "install_resolving": "Checking required plugins…",
+  "install_choose": "Choose a version first",
+  "install_requires": "The required plugins will be downloaded together after confirmation.",
+  "install_older": "Includes older versions: {packages}",
+  "install_cancel_download": "Cancel download",
+  "install_plugin": "Install plugin",
+  "install_confirm_download": "Confirm and download",
+  "install_dependency": "Required plugin",
+  "install_group": "In this install"
 }
