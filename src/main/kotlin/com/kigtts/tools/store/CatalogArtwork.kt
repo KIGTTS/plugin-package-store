@@ -27,5 +27,13 @@ internal fun validateArtwork(catalog: PackageCatalog) {
         icon(item.icon)
         require(item.description.length <= 32000 && item.thumbnails.size <= 8 && item.thumbnails.distinct().size == item.thumbnails.size) { "插件介绍或缩略图数量无效" }
         require(item.thumbnails.all { it in catalog.assets }) { "缩略图引用的图片未注册" }
+        require(item.localizations.size <= 32)
+        item.localizations.forEach { (tag, translation) ->
+            require(tag.length <= 80 && tag.matches(Regex("[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8}){0,5}")))
+            require(translation.name == null || translation.name.length in 1..80)
+            require((translation.summary?.length ?: 0) <= 1000 && (translation.description?.length ?: 0) <= 32000)
+            val images = translation.thumbnails.orEmpty()
+            require(images.size <= 8 && images.distinct().size == images.size && images.all { it in catalog.assets })
+        }
     }
 }

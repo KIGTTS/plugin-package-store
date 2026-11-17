@@ -1,11 +1,32 @@
 package com.kigtts.tools.store
 
 import com.kigtts.plugin.api.PluginJson
+import com.kigtts.plugin.api.PluginStrings
+import java.io.File
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
 
 class PackageCatalogTest {
+    @Test fun storeLanguageSwitchSelectsTranslatedMetadataAndCoverWithoutAffectingInstallIdentity() {
+        val item = entry("test.plugin", release()).item.copy(localizations = mapOf(
+            "en" to CatalogPackageTranslation("English name", "English summary", thumbnails = listOf("en-cover")),
+            "ko" to CatalogPackageTranslation("한국어 이름", "한국어 설명")))
+        val source = catalog("test.source", item).copy(assets = mapOf(
+            "en-cover" to CatalogImage("https://example.invalid/en.png", "a".repeat(64), 120, width = 900, height = 1600)))
+        val parsed = CatalogCodec.parse(PluginJson.encodeToString(source).toByteArray())
+        val english = parsed.packages.single().localized("en-US")
+        assertEquals("English name", english.name)
+        assertEquals(listOf("en-cover"), english.thumbnails)
+        assertEquals(item.releases, english.releases)
+        assertEquals(item.id, english.id)
+        assertEquals("한국어 이름", item.localized("ko-KR").name)
+        assertEquals(item, item.localized("de-DE"))
+        assertThrows(IllegalArgumentException::class.java) { CatalogCodec.validate(source.copy(assets = emptyMap())) }
+        val copy = StoreCopy(PluginStrings.fromAssets(File("src/main/assets")), "en-US")
+        assertEquals("Plugin Store", copy.text("store"))
+        assertEquals("3 plugin updates available", copy.text("update_count", "count" to "3"))
+    }
     @Test fun validMultipleVersionsMirrorsAndDependenciesRoundTrip() {
         val packageEntry = entry("test.plugin", release("1.0.0", 1), release("1.2.0", 2, mapOf("test.core" to "^1.0.0")))
         val source = catalog("test.source", packageEntry.item)

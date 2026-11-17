@@ -1,8 +1,8 @@
 {
   "id": "tools.package-store",
   "name": "插件商店",
-  "version": "0.16.12",
-  "versionCode": 34,
+  "version": "0.16.13",
+  "versionCode": 35,
   "entryClass": "com.kigtts.tools.store.PackageStorePlugin",
   "apiVersion": 33,
   "minSdk": 26,

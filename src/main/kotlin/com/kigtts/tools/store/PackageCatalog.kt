@@ -5,6 +5,7 @@ import com.kigtts.plugin.api.PluginJson
 import com.kigtts.plugin.api.ResourceType
 import kotlinx.serialization.Serializable
 import java.net.URI
+import java.util.Locale
 
 @Serializable enum class PackageFormat { NATIVE, LUA, RESOURCE }
 @Serializable enum class SourceKind { PLUGINS, RESOURCES }
@@ -14,11 +15,26 @@ import java.net.URI
     val apiVersion: Int = PLUGIN_API_VERSION, val minSdk: Int = 26, val abis: List<String> = emptyList(), val notes: String = "",
     val dependencies: Map<String, String> = emptyMap(),
     val permissions: List<String>? = null, val permissionPurposes: Map<String, String> = emptyMap())
+@Serializable data class CatalogPackageTranslation(val name: String? = null, val summary: String? = null,
+    val description: String? = null, val thumbnails: List<String>? = null)
 @Serializable data class CatalogPackage(val id: String, val name: String, val summary: String, val releases: List<PackageRelease>,
     val category: String = "扩展", val tags: List<String> = emptyList(), val license: String = "MIT", val homepage: String = "",
     val icon: CatalogIcon? = null, val description: String = "", val thumbnails: List<String> = emptyList(),
-    val resourceType: ResourceType? = null) {
+    val resourceType: ResourceType? = null, val localizations: Map<String, CatalogPackageTranslation> = emptyMap()) {
     val section get() = resourceType?.label ?: category
+}
+
+/** Only visible metadata is translated. Install identity, releases, categories and tags remain unchanged. */
+internal fun CatalogPackage.localized(locale: String): CatalogPackage {
+    var tag = Locale.forLanguageTag(locale).toLanguageTag()
+    while (tag.isNotBlank() && tag != "und") {
+        localizations.entries.firstOrNull { it.key.equals(tag, ignoreCase = true) }?.value?.let {
+            return copy(name = it.name ?: name, summary = it.summary ?: summary,
+                description = it.description ?: it.summary ?: description, thumbnails = it.thumbnails ?: thumbnails)
+        }
+        tag = tag.substringBeforeLast('-', "")
+    }
+    return this
 }
 @Serializable data class SourceLinkPolicy(val requireAddition: Boolean = false, val recommendAfterInstall: Boolean = false)
 @Serializable data class PackageCatalog(val schemaVersion: Int = 1, val id: String, val name: String,

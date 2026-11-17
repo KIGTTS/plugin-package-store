@@ -4,17 +4,17 @@ import com.kigtts.plugin.api.*
 
 internal const val STORE_PAGE_SIZE = 12
 internal fun catalogPageId(source: String? = null, category: String? = null) = "catalog/${source ?: "all"}/${category?.let(::categoryKey) ?: "all"}"
-internal fun storeHeaderActions(updates: Int = 0, downloading: Boolean = false) = PageBlock.Actions(listOf(
-    PageAction("search", "搜索", symbol = "search"), PageAction("library", "我的插件", symbol = when { downloading -> "download"; updates > 0 -> "upgrade"; else -> "widgets" }, badge = updateBadge(updates)),
-    PageAction("downloads", "下载管理", symbol = "download"), PageAction("store-settings", "设置", symbol = "settings")))
+internal fun storeHeaderActions(updates: Int = 0, downloading: Boolean = false, copy: StoreCopy = StoreCopy.Chinese) = PageBlock.Actions(listOf(
+    PageAction("search", copy.text("search"), symbol = "search"), PageAction("library", copy.text("library"), symbol = when { downloading -> "download"; updates > 0 -> "upgrade"; else -> "widgets" }, badge = updateBadge(updates, copy)),
+    PageAction("downloads", copy.text("downloads"), symbol = "download"), PageAction("store-settings", copy.text("settings"), symbol = "settings")))
 
-internal fun updateBadge(updates: Int): PluginBadge? = updates.takeIf { it > 0 }?.let { PluginBadge(it, "$it 个插件可更新") }
+internal fun updateBadge(updates: Int, copy: StoreCopy = StoreCopy.Chinese): PluginBadge? = updates.takeIf { it > 0 }?.let { PluginBadge(it, copy.text("update_count", "count" to (it).toString())) }
 
-internal fun storeShortcuts() = listOf(
-    PageAction("section/categories", "分类", PluginIcon.NONE, "category"),
-    PageAction("section/source-sections", "来源", PluginIcon.NONE, "source"),
-    PageAction("open-catalog/${catalogPageId()}", "所有插件", PluginIcon.NONE, "apps"),
-    PageAction("section/resources", "资源", PluginIcon.NONE, "collections_bookmark"))
+internal fun storeShortcuts(copy: StoreCopy = StoreCopy.Chinese) = listOf(
+    PageAction("section/categories", copy.text("categories"), PluginIcon.NONE, "category"),
+    PageAction("section/source-sections", copy.text("sources"), PluginIcon.NONE, "source"),
+    PageAction("open-catalog/${catalogPageId()}", copy.text("all_plugins"), PluginIcon.NONE, "apps"),
+    PageAction("section/resources", copy.text("resources"), PluginIcon.NONE, "collections_bookmark"))
 
 internal fun storeLimit(view: StoreView, id: String) = (view.catalogLimits[id] ?: STORE_PAGE_SIZE).coerceIn(STORE_PAGE_SIZE, 1000)
 internal fun storeLoadMore(view: StoreView, id: String, count: Int): ManagementLoadMore? =
@@ -29,20 +29,20 @@ internal fun sourceSectionItem(source: SourceRecord, sources: SourceStore, jobs:
         symbol = catalog?.icon?.symbol, image = jobs.icon(catalog, catalog?.icon), primaryAction = "section/categories/${source.key}")
 }
 
-internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs): PluginPage {
+internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs, copy: StoreCopy = StoreCopy.Chinese): PluginPage {
     if (id == "resources" || id == "resource-sources") return resourceSectionsPage(id, sources, jobs)
-    if (id == "source-sections") return PluginPage(id, "插件来源", commonStatus(jobs),
+    if (id == "source-sections") return PluginPage(id, copy.text("plugin_sources"), commonStatus(jobs, copy),
         ManagementList(id, sources.records().filter { it.enabled }.map { sourceSectionItem(it, sources, jobs) },
-            emptyText = "还没有可浏览的来源", style = ManagementListStyle.CATALOG))
+            emptyText = copy.text("empty_sources"), style = ManagementListStyle.CATALOG))
     val key = id.substringAfter('/', "").takeIf { it.isNotEmpty() }
     val source = key?.let { value -> sources.records().firstOrNull { it.key == value && it.enabled } }
-    if (key != null && source == null) return PluginPage(id, "插件来源", listOf(PageBlock.Notice("这个来源已停用或移除。")))
+    if (key != null && source == null) return PluginPage(id, copy.text("plugin_sources"), listOf(PageBlock.Notice(copy.text("source_gone"))))
     val categories = sources.entries().filter { key == null || it.source.key == key }.map { it.item.section }.distinct().sorted()
-    return PluginPage(id, source?.name ?: "插件分类", commonStatus(jobs), ManagementList(id,
-        listOf(ManagementItem("all", "所有插件", icon = PluginIcon.NONE, symbol = "apps", primaryAction = "open-catalog/${catalogPageId(key)}")) +
+    return PluginPage(id, source?.name ?: copy.text("plugin_categories"), commonStatus(jobs, copy), ManagementList(id,
+        listOf(ManagementItem("all", copy.text("all_plugins"), icon = PluginIcon.NONE, symbol = "apps", primaryAction = "open-catalog/${catalogPageId(key)}")) +
             categories.map { category -> ManagementItem(categoryKey(category), category, icon = PluginIcon.NONE,
                 symbol = categorySymbol(category), primaryAction = "open-catalog/${catalogPageId(key, category)}") },
-        emptyText = "暂无分类", style = ManagementListStyle.CATALOG), header = source?.let { sourceSectionItem(it, sources, jobs).copy(primaryAction = null) })
+        emptyText = copy.text("empty_categories"), style = ManagementListStyle.CATALOG), header = source?.let { sourceSectionItem(it, sources, jobs).copy(primaryAction = null) })
 }
 
 internal fun categorySymbol(category: String) = when (category) {
@@ -61,12 +61,12 @@ internal fun catalogScope(id: String, sources: SourceStore): StoreView? {
     return StoreView(source = source, category = category)
 }
 
-internal fun catalogListingPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice): PluginPage {
-    val scope = catalogScope(id, sources) ?: return PluginPage(id, "插件商店", listOf(PageBlock.Notice("这个分区暂时没有可浏览的插件。")))
+internal fun catalogListingPage(id: String, sources: SourceStore, jobs: StoreJobs, view: StoreView, device: StoreDevice, copy: StoreCopy = StoreCopy.Chinese): PluginPage {
+    val scope = catalogScope(id, sources) ?: return PluginPage(id, copy.text("store"), listOf(PageBlock.Notice(copy.text("unavailable_section"))))
     val entries = discover(sources.entries(), scope, jobs.installed, device)
     val visible = entries.take(storeLimit(view, id))
-    return PluginPage(id, scope.category ?: scope.source?.let { sources.source(it).name } ?: "所有插件",
-        commonStatus(jobs), ManagementList(id, visible.map { storeItem(it, sources.catalog(it.source.key), jobs) },
-            emptyText = "暂无插件", style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
+    return PluginPage(id, scope.category ?: scope.source?.let { sources.source(it).name } ?: copy.text("all_plugins"),
+        commonStatus(jobs, copy), ManagementList(id, visible.map { storeItem(it, sources.catalog(it.source.key), jobs, copy = copy) },
+            emptyText = copy.text("no_plugins"), style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
             loadMore = storeLoadMore(view, id, entries.size)))
 }

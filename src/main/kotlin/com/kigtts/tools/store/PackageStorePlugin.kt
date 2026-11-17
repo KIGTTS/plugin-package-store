@@ -8,7 +8,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.12")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.13")
+    override val localization = PluginLocalization(supportedLocales = listOf("zh-CN", "en", "ko"))
+    private var strings: PluginStrings? = null
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
     private lateinit var jobs: StoreJobs
@@ -21,6 +23,7 @@ class PackageStorePlugin : KigPlugin {
     private fun changed() { changes.update { it + 1 } }
     override suspend fun attach(environment: PluginEnvironment) {
         this.environment = environment
+        strings = PluginStrings.fromAssets(environment.assets)
         sources = SourceStore(environment.storage); device = StoreDevice(Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.toSet())
         val transport = HttpsStoreTransport { environment.requirePermission("network") }
         downloader = PackageDownloader(environment.storage, transport)
@@ -30,23 +33,28 @@ class PackageStorePlugin : KigPlugin {
             PackageDownloader(environment.storage, HttpsStoreTransport { environment.requirePermission("network") }), ArtifactInspector(environment.storage), ::changed)
         jobs.reloadInstalled() // Preload local state; visible page entry requests the network refresh.
     }
-    override val contributions get(): PluginContributions {
+    override val contributions get() = contributions(PluginContext("", ""))
+    override fun contributions(context: PluginContext): PluginContributions {
+        val copy = StoreCopy(strings, context.locale)
         val updates = if (::jobs.isInitialized) discover(sources.entries(), StoreView(filter = "updates"), jobs.installed, device).size else 0
         return PluginContributions(settingsEntries = listOf(
-        SettingsEntry("store", "插件商店", "store", PluginIcon.NONE, summary = "发现、安装与更新插件", symbol = "storefront", badge = updateBadge(updates))),
+        SettingsEntry("store", copy.text("store"), "store", PluginIcon.NONE, summary = copy.text("summary"), symbol = "storefront", badge = updateBadge(updates, copy))),
         automationActions = listOf("add-source"), sourceAction = "add-source")
     }
     override fun page(pageId: String, context: PluginContext): PluginPage? {
+        val copy = StoreCopy(strings, context.locale)
         val page = if (pageId == "package") sourcePackagePage(sources, jobs, view, device)
-            ?: storePage(pageId, sources, jobs, view.copy(), device) else storePage(pageId, sources, jobs, view.copy(), device)
+            ?: storePage(pageId, sources, jobs, view.copy(), device, copy) else storePage(pageId, sources, jobs, view.copy(), device, copy)
         return page?.let { current -> jobs.downloads?.automaticAction()?.let { current.copy(onEnterAction = it) } ?: current }
     }
     override suspend fun execute(actionId: String, context: PluginContext): PluginOutcome = actions.withLock {
+        val copy = StoreCopy(strings, context.locale)
         try { perform(actionId, context).also { changed() } }
         catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-        catch (failure: Exception) { PluginOutcome.Message(failure.message?.take(200) ?: "操作暂时无法完成") }
+        catch (failure: Exception) { PluginOutcome.Message(failure.message?.take(200) ?: copy.text("operation_failed")) }
     }
     private suspend fun perform(actionId: String, context: PluginContext): PluginOutcome {
+        val copy = StoreCopy(strings, context.locale)
         val prefix = actionId.substringBefore('/'); val id = actionId.substringAfter('/', "")
         val value = context.inputs["value"].orEmpty()
         return when (prefix) {
@@ -56,7 +64,7 @@ class PackageStorePlugin : KigPlugin {
                 proposeSource(sources, view, url, context.inputs["packageId"], context.inputs["requireSource"] != "false").also {
                     if (view.linkTarget != null && sources.findUrl(url)?.enabled == true) jobs.preview(url)
                 }
-            } ?: PluginOutcome.TextInput("插件源地址（HTTPS）", "source-address")
+            } ?: PluginOutcome.TextInput(copy.text("source_address"), "source-address")
             "source-address" -> propose(value)
             "source-confirm" -> {
                 check(!jobs.busy)
@@ -90,11 +98,11 @@ class PackageStorePlugin : KigPlugin {
             "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.section }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
             "refresh" -> { if (id.isBlank()) jobs.entered() else jobs.refresh(id); PluginOutcome.RefreshUi }
             "source-toggle" -> { check(!jobs.busy); sources.toggle(id); view.offset = 0; PluginOutcome.RefreshUi }
-            "source-remove" -> PluginOutcome.Menu("移除此源？", listOf(PageAction("source-remove-confirm/$id", "移除", PluginIcon.CLOSE)))
+            "source-remove" -> PluginOutcome.Menu(copy.text("remove_source"), listOf(PageAction("source-remove-confirm/$id", copy.text("remove"), PluginIcon.CLOSE)))
             "source-remove-confirm" -> { check(!jobs.busy); sources.remove(id); if (view.source == id) view.source = null; view.offset = 0; PluginOutcome.RefreshUi }
             "sources-reorder" -> { sources.reorder(PluginJson.decodeFromString(requireNotNull(context.inputs["order"]))); PluginOutcome.RefreshUi }
             "browse-source" -> PluginOutcome.OpenPage("categories/$id")
-            "source-select" -> PluginOutcome.Menu("来源", listOf(PageAction("source-filter/all", "全部源")) + sources.records().filter { it.enabled }.map { PageAction("source-filter/${it.key}", it.name) })
+            "source-select" -> PluginOutcome.Menu(copy.text("sources"), listOf(PageAction("source-filter/all", copy.text("all_sources"))) + sources.records().filter { it.enabled }.map { PageAction("source-filter/${it.key}", it.name) })
             "source-filter" -> PluginOutcome.OpenPage(catalogPageId(id.takeUnless { it == "all" }))
             "search" -> { view.query = ""; view.offset = 0; PluginOutcome.OpenPage("search") }
             "search-save" -> { require(value.length <= 100); view.query = value; view.offset = 0; PluginOutcome.RefreshUi }
@@ -125,9 +133,9 @@ class PackageStorePlugin : KigPlugin {
             "show-plan", "continue-install" -> PluginOutcome.OpenPage("downloads")
             "install-cancel" -> { jobs.clearPrepared(); PluginOutcome.OpenPage("store") }
             "cancel-job" -> { jobs.cancel(); PluginOutcome.RefreshUi }
-            "clear-cache" -> PluginOutcome.Menu("清除已下载的包？", listOf(PageAction("clear-cache-confirm", "清除", PluginIcon.CLOSE)))
-            "clear-cache-confirm" -> { check(!jobs.busy && jobs.downloads?.canClearCache() != false) { "请先完成或取消下载任务" }; downloader.clearDownloads(); jobs.clearPrepared(); PluginOutcome.RefreshUi }
-            else -> PluginOutcome.Message("未知商店操作")
+            "clear-cache" -> PluginOutcome.Menu(copy.text("clear_prompt"), listOf(PageAction("clear-cache-confirm", copy.text("clear"), PluginIcon.CLOSE)))
+            "clear-cache-confirm" -> { check(!jobs.busy && jobs.downloads?.canClearCache() != false) { copy.text("finish_downloads") }; downloader.clearDownloads(); jobs.clearPrepared(); PluginOutcome.RefreshUi }
+            else -> PluginOutcome.Message(copy.text("unknown_action"))
         }
     }
     private fun propose(url: String): PluginOutcome = proposeSource(sources, view, url)
