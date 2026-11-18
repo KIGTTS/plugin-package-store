@@ -87,5 +87,21 @@
   "install_plugin": "安装插件",
   "install_confirm_download": "确认并下载",
   "install_dependency": "前置插件",
-  "install_group": "本次安装"
+  "install_group": "本次安装",
+  "category.audio": "音频",
+  "category.appearance": "外观",
+  "category.content": "内容",
+  "category.input": "输入",
+  "category.development": "开发",
+  "category.extensions": "扩展",
+  "resource.quick_text": "快捷文本",
+  "resource.photos": "照片集",
+  "resource.filter": "滤镜",
+  "resource.voice": "语音包",
+  "resource.frame": "照片边框",
+  "resource.stickers": "贴纸包",
+  "resource.card_frame": "名片边框",
+  "resource.font": "字体",
+  "resource_sources": "资源来源",
+  "empty_resource_sources": "添加资源源，发现更多字幕、照片与声音"
 }

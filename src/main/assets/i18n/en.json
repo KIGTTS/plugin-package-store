@@ -87,5 +87,21 @@
   "install_plugin": "Install plugin",
   "install_confirm_download": "Confirm and download",
   "install_dependency": "Required plugin",
-  "install_group": "In this install"
+  "install_group": "In this install",
+  "category.audio": "Audio",
+  "category.appearance": "Appearance",
+  "category.content": "Content",
+  "category.input": "Input",
+  "category.development": "Development",
+  "category.extensions": "Extensions",
+  "resource.quick_text": "Quick Text",
+  "resource.photos": "Photo Collections",
+  "resource.filter": "Filters",
+  "resource.voice": "Voice Packs",
+  "resource.frame": "Photo Frames",
+  "resource.stickers": "Sticker Packs",
+  "resource.card_frame": "Profile Card Frames",
+  "resource.font": "Fonts",
+  "resource_sources": "Resource Sources",
+  "empty_resource_sources": "Add a source to find more captions, photos, and voices"
 }

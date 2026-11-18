@@ -5,11 +5,11 @@ import java.security.MessageDigest
 
 /** Stable discovery order is independent of which plugin the user last opened or installed. */
 internal fun discover(entries: List<CatalogEntry>, view: StoreView, installed: Map<String, InstalledPackage>, device: StoreDevice,
-    locale: String = "zh-CN"): List<CatalogEntry> = entries
+    copy: StoreCopy = StoreCopy.Chinese): List<CatalogEntry> = entries
     .filter { entry -> installed[entry.item.id]?.builtin != true && (view.source == null || entry.source.key == view.source) &&
         (view.category == null || entry.item.section == view.category) &&
-        (view.query.isBlank() || entry.item.localized(locale).let {
-            listOf(it.name, it.summary, entry.item.name, entry.item.summary, entry.item.section, entry.item.tags.joinToString()).any { field ->
+        (view.query.isBlank() || entry.item.localized(copy.locale).let {
+            listOf(it.name, it.summary, entry.item.name, entry.item.summary, entry.item.section, copy.sectionLabel(entry.item.section), entry.item.tags.joinToString()).any { field ->
                 field.contains(view.query, ignoreCase = true)
             }
         }) &&
@@ -31,7 +31,7 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
     val visible = if (grouped) entries.groupBy { it.item.section }.values.flatMap { it.take(3) } else entries.take(storeLimit(view, key))
     val filters = listOf(ManagementFilter("all", copy.text("all"), "category/all", view.category == null, "apps")) +
         categories.map { category ->
-            ManagementFilter(categoryKey(category), category, "category/${categoryKey(category)}",
+            ManagementFilter(categoryKey(category), copy.sectionLabel(category), "category/${categoryKey(category)}",
                 view.category == category, categorySymbol(category))
         }
     val updates = discover(all, StoreView(filter = "updates"), jobs.installed, device).size
@@ -41,8 +41,8 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
         }, emptyText = if (all.isEmpty()) copy.text("empty_store") else copy.text("no_matches"), filters = filters,
             style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
             shortcuts = storeShortcuts(copy), loadMore = if (grouped) null else storeLoadMore(view, key, entries.size),
-            sectionActions = if (grouped) entries.map { it.item.section }.distinct().associateWith {
-                PageAction("open-catalog/${catalogPageId(category = it)}", copy.text("more"), symbol = "chevron_right")
+            sectionActions = if (grouped) entries.map { it.item.section }.distinct().associate { category ->
+                copy.sectionLabel(category) to PageAction("open-catalog/${catalogPageId(category = category)}", copy.text("more"), symbol = "chevron_right")
             } else emptyMap()), onEnterAction = "store-enter")
 }
 

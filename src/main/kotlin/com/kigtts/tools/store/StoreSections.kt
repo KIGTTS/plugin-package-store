@@ -30,7 +30,7 @@ internal fun sourceSectionItem(source: SourceRecord, sources: SourceStore, jobs:
 }
 
 internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs, copy: StoreCopy = StoreCopy.Chinese): PluginPage {
-    if (id == "resources" || id == "resource-sources") return resourceSectionsPage(id, sources, jobs)
+    if (id == "resources" || id == "resource-sources") return resourceSectionsPage(id, sources, jobs, copy)
     if (id == "source-sections") return PluginPage(id, copy.text("plugin_sources"), commonStatus(jobs, copy),
         ManagementList(id, sources.records().filter { it.enabled }.map { sourceSectionItem(it, sources, jobs) },
             emptyText = copy.text("empty_sources"), style = ManagementListStyle.CATALOG))
@@ -40,7 +40,7 @@ internal fun sectionPage(id: String, sources: SourceStore, jobs: StoreJobs, copy
     val categories = sources.entries().filter { key == null || it.source.key == key }.map { it.item.section }.distinct().sorted()
     return PluginPage(id, source?.name ?: copy.text("plugin_categories"), commonStatus(jobs, copy), ManagementList(id,
         listOf(ManagementItem("all", copy.text("all_plugins"), icon = PluginIcon.NONE, symbol = "apps", primaryAction = "open-catalog/${catalogPageId(key)}")) +
-            categories.map { category -> ManagementItem(categoryKey(category), category, icon = PluginIcon.NONE,
+            categories.map { category -> ManagementItem(categoryKey(category), copy.sectionLabel(category), icon = PluginIcon.NONE,
                 symbol = categorySymbol(category), primaryAction = "open-catalog/${catalogPageId(key, category)}") },
         emptyText = copy.text("empty_categories"), style = ManagementListStyle.CATALOG), header = source?.let { sourceSectionItem(it, sources, jobs).copy(primaryAction = null) })
 }
@@ -65,7 +65,7 @@ internal fun catalogListingPage(id: String, sources: SourceStore, jobs: StoreJob
     val scope = catalogScope(id, sources) ?: return PluginPage(id, copy.text("store"), listOf(PageBlock.Notice(copy.text("unavailable_section"))))
     val entries = discover(sources.entries(), scope, jobs.installed, device)
     val visible = entries.take(storeLimit(view, id))
-    return PluginPage(id, scope.category ?: scope.source?.let { sources.source(it).name } ?: copy.text("all_plugins"),
+    return PluginPage(id, scope.category?.let(copy::sectionLabel) ?: scope.source?.let { sources.source(it).name } ?: copy.text("all_plugins"),
         commonStatus(jobs, copy), ManagementList(id, visible.map { storeItem(it, sources.catalog(it.source.key), jobs, copy = copy) },
             emptyText = copy.text("no_plugins"), style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
             loadMore = storeLoadMore(view, id, entries.size)))

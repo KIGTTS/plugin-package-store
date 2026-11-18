@@ -37,6 +37,24 @@ class StoreSectionsTest {
         assertEquals(listOf("apps", "category", "graphic_eq"), home.filters.map { it.symbol })
         assertEquals("graphic_eq", page("source-sections").management!!.items.first { it.id == a.key }.symbol)
         assertEquals(listOf("所有插件", "音频"), page("categories/${a.key}").management!!.items.map { it.title })
+        val strings = PluginStrings.fromAssets(File("src/main/assets"))
+        for ((locale, audio, voice) in listOf(
+            Triple("en-US", "Audio", "Voice Packs"),
+            Triple("ko-KR", "오디오", "음성 팩"),
+            Triple("ja-JP", "オーディオ", "音声パック"),
+        )) {
+            val copy = StoreCopy(strings, locale)
+            fun translated(key: String, state: StoreView = view) = storePage(key, sources, jobs, state, testDevice, copy)!!
+            val localized = translated("store").management!!
+            assertEquals(home.filters.map { it.id }, localized.filters.map { it.id })
+            assertEquals(audio, localized.filters.last().label)
+            assertTrue(localized.items.any { it.group == audio })
+            assertEquals(home.sectionActions.getValue("音频").id, localized.sectionActions.getValue(audio).id)
+            assertEquals(audio, translated(id).title)
+            assertEquals(audio, translated("categories/${a.key}").management!!.items.last().title)
+            assertEquals(voice, translated("resources").management!!.items.first { it.id == "VOICE" }.title)
+            assertTrue(translated("search", StoreView(query = audio)).management!!.items.any { it.group == audio })
+        }
         assertEquals(packages.take(12).map { it.id }, page(id).management!!.items.map { it.id })
         appendStoreBatch(view, id, 12)
         appendStoreBatch(view, id, 12) // Stale duplicate cannot skip a batch.

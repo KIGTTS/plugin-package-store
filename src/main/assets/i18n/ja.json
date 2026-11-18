@@ -87,5 +87,21 @@
   "install_plugin": "プラグインをインストール",
   "install_confirm_download": "確認してダウンロード",
   "install_dependency": "必要なプラグイン",
-  "install_group": "このインストールに含まれるもの"
+  "install_group": "このインストールに含まれるもの",
+  "category.audio": "オーディオ",
+  "category.appearance": "外観",
+  "category.content": "コンテンツ",
+  "category.input": "入力",
+  "category.development": "開発",
+  "category.extensions": "拡張",
+  "resource.quick_text": "クイックテキスト",
+  "resource.photos": "写真コレクション",
+  "resource.filter": "フィルター",
+  "resource.voice": "音声パック",
+  "resource.frame": "写真フレーム",
+  "resource.stickers": "ステッカーパック",
+  "resource.card_frame": "プロフィールカードのフレーム",
+  "resource.font": "フォント",
+  "resource_sources": "リソースソース",
+  "empty_resource_sources": "ソースを追加して、字幕、写真、音声を見つけましょう"
 }

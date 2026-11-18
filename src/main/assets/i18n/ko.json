@@ -87,5 +87,21 @@
   "install_plugin": "플러그인 설치",
   "install_confirm_download": "확인 후 다운로드",
   "install_dependency": "필수 플러그인",
-  "install_group": "이번에 설치"
+  "install_group": "이번에 설치",
+  "category.audio": "오디오",
+  "category.appearance": "외관",
+  "category.content": "콘텐츠",
+  "category.input": "입력",
+  "category.development": "개발",
+  "category.extensions": "확장",
+  "resource.quick_text": "빠른 문구",
+  "resource.photos": "사진 모음",
+  "resource.filter": "필터",
+  "resource.voice": "음성 팩",
+  "resource.frame": "사진 프레임",
+  "resource.stickers": "스티커 팩",
+  "resource.card_frame": "프로필 카드 프레임",
+  "resource.font": "글꼴",
+  "resource_sources": "리소스 출처",
+  "empty_resource_sources": "소스를 추가해 더 많은 자막, 사진, 음성을 찾아보세요"
 }
