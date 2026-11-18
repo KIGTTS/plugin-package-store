@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.16")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.17")
     override val localization = PluginLocalization(supportedLocales = listOf("zh-CN", "en", "ko", "ja"))
     private var strings: PluginStrings? = null
     private lateinit var environment: PluginEnvironment
@@ -43,7 +43,7 @@ class PackageStorePlugin : KigPlugin {
     }
     override fun page(pageId: String, context: PluginContext): PluginPage? {
         val copy = StoreCopy(strings, context.locale)
-        val page = if (pageId == "package") sourcePackagePage(sources, jobs, view, device)
+        val page = if (pageId == "package") sourcePackagePage(sources, jobs, view, device, copy)
             ?: storePage(pageId, sources, jobs, view.copy(), device, copy) else storePage(pageId, sources, jobs, view.copy(), device, copy)
         return page?.let { current -> jobs.downloads?.automaticAction()?.let { current.copy(onEnterAction = it) } ?: current }
     }
@@ -51,7 +51,9 @@ class PackageStorePlugin : KigPlugin {
         val copy = StoreCopy(strings, context.locale)
         try { perform(actionId, context).also { changed() } }
         catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-        catch (failure: Exception) { PluginOutcome.Message(failure.message?.take(200) ?: copy.text("operation_failed")) }
+        catch (failure: Exception) {
+            PluginOutcome.Message(copy.text((failure as? StoreSourceProblem)?.key ?: "operation_failed"))
+        }
     }
     private suspend fun perform(actionId: String, context: PluginContext): PluginOutcome {
         val copy = StoreCopy(strings, context.locale)
@@ -61,11 +63,11 @@ class PackageStorePlugin : KigPlugin {
             "store-enter" -> { jobs.downloads?.reconcile(); jobs.entered(); PluginOutcome.RefreshUi }
             "downloads-enter" -> { jobs.downloads?.reconcile(); jobs.reloadInstalled(); PluginOutcome.RefreshUi }
             "add-source" -> context.inputs["url"]?.let { url ->
-                proposeSource(sources, view, url, context.inputs["packageId"], context.inputs["requireSource"] != "false").also {
+                proposeSource(sources, view, url, context.inputs["packageId"], context.inputs["requireSource"] != "false", copy).also {
                     if (view.linkTarget != null && sources.findUrl(url)?.enabled == true) jobs.preview(url)
                 }
             } ?: PluginOutcome.TextInput(copy.text("source_address"), "source-address")
-            "source-address" -> propose(value)
+            "source-address" -> proposeSource(sources, view, value, copy = copy)
             "source-confirm" -> {
                 check(!jobs.busy)
                 val candidate = requireNotNull(sources.pending())
@@ -83,12 +85,12 @@ class PackageStorePlugin : KigPlugin {
             "target-refresh" -> { view.linkTarget?.let { jobs.preview(it.url) }; PluginOutcome.RefreshUi }
             "recommend-source" -> {
                 val entry = requireNotNull(view.selected)
-                proposeSource(sources, view, entry.source.url, entry.item.id)
+                proposeSource(sources, view, entry.source.url, entry.item.id, copy = copy)
             }
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
-            "font-library" -> openFontLibrary(sources, view)
+            "font-library" -> openFontLibrary(sources, view, copy)
             "section" -> { require(id in setOf("categories", "all-categories", "source-sections", "resources", "resource-sources") || id.startsWith("categories/")); PluginOutcome.OpenPage(if (id == "all-categories") "categories" else id) }
             "open-catalog" -> { requireNotNull(catalogScope(id, sources)); PluginOutcome.OpenPage(id) }
             "load-more" -> {
@@ -117,13 +119,13 @@ class PackageStorePlugin : KigPlugin {
             }
             "versions", "package-info" -> PluginOutcome.OpenPage(prefix)
             "version" -> { requireNotNull(view.selected).item.releases.single { it.versionCode == id.toInt() && it.compatible(device) }; view.selectedVersion = id.toInt(); PluginOutcome.OpenPage("package") }
-            "prepare" -> beginDownload(requireNotNull(view.selected), requireNotNull(view.selectedVersion))
+            "prepare" -> beginDownload(requireNotNull(view.selected), requireNotNull(view.selectedVersion), copy)
             "download-get" -> {
                 val parts = id.split('/')
                 val entry = sources.allEntries().first { it.source.key == parts[0] && it.item.id == parts[1] }
-                beginDownload(entry, parts[2].toInt())
+                beginDownload(entry, parts[2].toInt(), copy)
             }
-            "download-review" -> reviewDownload(requireNotNull(jobs.downloads).task(id))
+            "download-review" -> reviewDownload(requireNotNull(jobs.downloads).task(id), copy)
             "download-confirm" -> { requireNotNull(jobs.downloads).confirm(id); PluginOutcome.RefreshUi }
             "download-retry" -> { requireNotNull(jobs.downloads).retry(id); PluginOutcome.RefreshUi }
             "download-cancel" -> { requireNotNull(jobs.downloads).cancel(id); PluginOutcome.RefreshUi }
@@ -134,24 +136,23 @@ class PackageStorePlugin : KigPlugin {
             "install-cancel" -> { jobs.clearPrepared(); PluginOutcome.OpenPage("store") }
             "cancel-job" -> { jobs.cancel(); PluginOutcome.RefreshUi }
             "clear-cache" -> PluginOutcome.Menu(copy.text("clear_prompt"), listOf(PageAction("clear-cache-confirm", copy.text("clear"), PluginIcon.CLOSE)))
-            "clear-cache-confirm" -> { check(!jobs.busy && jobs.downloads?.canClearCache() != false) { copy.text("finish_downloads") }; downloader.clearDownloads(); jobs.clearPrepared(); PluginOutcome.RefreshUi }
+            "clear-cache-confirm" -> { check(!jobs.busy && jobs.downloads?.canClearCache() != false) { throw StoreSourceIssue("finish_downloads", "请先结束或取消下载") }; downloader.clearDownloads(); jobs.clearPrepared(); PluginOutcome.RefreshUi }
             else -> PluginOutcome.Message(copy.text("unknown_action"))
         }
     }
-    private fun propose(url: String): PluginOutcome = proposeSource(sources, view, url)
-    private suspend fun beginDownload(entry: CatalogEntry, version: Int): PluginOutcome {
+    private suspend fun beginDownload(entry: CatalogEntry, version: Int, copy: StoreCopy): PluginOutcome {
         val downloads = requireNotNull(jobs.downloads)
         downloads.reconcile()
         val task = downloads.offer(entry, version, jobs.installed)
-        return reviewDownload(task)
+        return reviewDownload(task, copy)
     }
-    private fun reviewDownload(task: StoreDownload): PluginOutcome {
+    private fun reviewDownload(task: StoreDownload, copy: StoreCopy): PluginOutcome {
         if (task.phase != StoreDownloadPhase.CONFIRM) return PluginOutcome.RefreshUi
         if (task.plan.ordered.size > 1 || task.plan.downgrades.isNotEmpty()) {
-            val names = task.plan.ordered.joinToString("\n") { "• ${it.entry.item.name} ${it.release.version}" }
-            return PluginOutcome.Confirm("确认下载", "将下载以下内容：\n\n$names" +
-                if (task.plan.downgrades.isNotEmpty()) "\n\n包含较早版本，安装前请确认兼容性。" else "",
-                PageAction("download-confirm/${task.id}", "确认并下载", PluginIcon.NONE, "download"), "稍后")
+            val names = task.plan.ordered.joinToString("\n") { "• ${it.entry.item.localized(copy.locale).name} ${it.release.version}" }
+            return PluginOutcome.Confirm(copy.text("source.download.title"), copy.text("source.download.items", "items" to "\n\n$names") +
+                if (task.plan.downgrades.isNotEmpty()) "\n\n" + copy.text("source.download.older") else "",
+                PageAction("download-confirm/${task.id}", copy.text("install_confirm_download"), PluginIcon.NONE, "download"), copy.text("source.download.later"))
         }
         requireNotNull(jobs.downloads).confirm(task.id)
         return PluginOutcome.RefreshUi

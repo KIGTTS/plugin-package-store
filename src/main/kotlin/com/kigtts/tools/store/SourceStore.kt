@@ -8,7 +8,7 @@ import java.io.File
 import java.util.UUID
 
 @Serializable data class SourceRecord(val key: String = UUID.randomUUID().toString(), val url: String,
-    val name: String, val enabled: Boolean = true, val catalogId: String? = null, val lastFetched: Long = 0, val error: String = "")
+    val name: String, val enabled: Boolean = true, val catalogId: String? = null, val lastFetched: Long = 0, val error: String = "", val errorKey: String? = null)
 @Serializable data class SourceCandidate(val token: String = UUID.randomUUID().toString(), val url: String, val packageId: String? = null)
 @Serializable private data class SourceConfiguration(val records: List<SourceRecord> = emptyList(), val pending: SourceCandidate? = null, val officialSourceSeeded: Boolean = false, val resourceSourceSeeded: Boolean = false)
 
@@ -39,44 +39,46 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     @Synchronized fun preview(url: String): SourceRecord {
         val address = CatalogCodec.https(url)
         findUrl(address)?.let { return it }
-        require(previews.size < 16) { "打开的临时来源较多，请关闭商店后重试" }
+        require(previews.size < 16) { throw StoreSourceIssue("source.issue.previews", "打开的临时来源较多，请关闭商店后重试") }
         return SourceRecord(url = address, name = java.net.URI(address).host).also { previews[it.key] = it }
     }
     @Synchronized fun allEntries() = entries() + previews.values.flatMap(::visibleEntries)
     @Synchronized fun recommends(entry: CatalogEntry) = state.records.none { it.url == entry.source.url || it.catalogId == catalogs[entry.source.key]?.id } && catalogs[entry.source.key]?.linkPolicy?.recommendAfterInstall == true
     @Synchronized fun propose(url: String, packageId: String? = null): SourceCandidate {
-        require(packageId == null || CatalogCodec.ID.matches(packageId)) { "插件标识不合法" }
-        require(packageId == null || !isPausedPackage(packageId)) { "此插件暂不可用" }
+        require(packageId == null || CatalogCodec.ID.matches(packageId)) { throw StoreSourceIssue("source.issue.package_id", "插件标识不合法") }
+        require(packageId == null || !isPausedPackage(packageId)) { throw StoreSourceIssue("source.issue.paused", "此插件暂不可用") }
         val normalized = CatalogCodec.https(url)
-        require(state.records.none { it.url == normalized }) { "这个源已经添加过了，可在“插件来源”中查看。" }
+        require(state.records.none { it.url == normalized }) { throw StoreSourceIssue("source.issue.duplicate", "这个源已经添加过了，可在“插件来源”中查看。") }
         return SourceCandidate(url = normalized, packageId = packageId).also { state = state.copy(pending = it); save() }
     }
     @Synchronized fun cancelCandidate() { state = state.copy(pending = null); save() }
     @Synchronized fun confirm(token: String): SourceRecord {
-        val candidate = state.pending?.takeIf { it.token == token } ?: error("确认已失效")
-        require(candidate.packageId == null || !isPausedPackage(candidate.packageId)) { "此插件暂不可用" }
-        require(state.records.size < 32) { "最多可添加 32 个源" }
-        require(state.records.none { it.url == candidate.url }) { "这个源已经添加过了" }
+        val candidate = state.pending?.takeIf { it.token == token } ?: throw StoreSourceStateIssue("source.issue.expired", "确认已失效")
+        require(candidate.packageId == null || !isPausedPackage(candidate.packageId)) { throw StoreSourceIssue("source.issue.paused", "此插件暂不可用") }
+        require(state.records.size < 32) { throw StoreSourceIssue("source.issue.limit", "最多可添加 32 个源") }
+        require(state.records.none { it.url == candidate.url }) { throw StoreSourceIssue("source.issue.duplicate", "这个源已经添加过了") }
         val record = previews.values.firstOrNull { it.url == candidate.url } ?: SourceRecord(url = candidate.url, name = java.net.URI(candidate.url).host)
-        require(record.catalogId == null || state.records.none { it.catalogId == record.catalogId }) { "这个源已通过其它地址添加" }
+        require(record.catalogId == null || state.records.none { it.catalogId == record.catalogId }) { throw StoreSourceIssue("source.issue.same", "这个源已通过其它地址添加") }
         previews.remove(record.key)
         catalogs[record.key]?.let { atomic(storage.file("catalogs/${record.key}.json"), PluginJson.encodeToString(it)) }
         state = state.copy(records = state.records + record, pending = null); save(); return record
     }
-    @Synchronized fun source(key: String) = state.records.firstOrNull { it.key == key } ?: previews[key] ?: error("源不存在")
+    @Synchronized fun source(key: String) = state.records.firstOrNull { it.key == key } ?: previews[key] ?: throw StoreSourceStateIssue("source.issue.missing", "源不存在")
     @Synchronized fun catalog(key: String) = catalogs[key]?.let { it.copy(packages = it.packages.filterNot { item -> isPausedPackage(item.id) }) }
     @Synchronized fun entries() = state.records.filter { it.enabled }.flatMap(::visibleEntries)
     private fun visibleEntries(source: SourceRecord) = catalog(source.key)?.packages.orEmpty().map { CatalogEntry(source, it) }
     @Synchronized fun fetched(key: String, catalog: PackageCatalog) {
         CatalogCodec.validate(catalog)
         val previous = source(key)
-        require(previous.catalogId == null || previous.catalogId == catalog.id) { "源 ID 发生变化，请移除后重新确认" }
-        require(key in previews || state.records.none { it.key != key && it.catalogId == catalog.id }) { "这个源已通过其它地址添加，可在“插件来源”中查看。" }
+        require(previous.catalogId == null || previous.catalogId == catalog.id) { throw StoreSourceIssue("source.issue.changed", "源 ID 发生变化，请移除后重新确认") }
+        require(key in previews || state.records.none { it.key != key && it.catalogId == catalog.id }) { throw StoreSourceIssue("source.issue.same", "这个源已通过其它地址添加，可在“插件来源”中查看。") }
         if (key !in previews) atomic(storage.file("catalogs/$key.json"), PluginJson.encodeToString(catalog))
         catalogs[key] = catalog
-        update(previous.copy(name = catalog.name, catalogId = catalog.id, lastFetched = System.currentTimeMillis(), error = ""))
+        update(previous.copy(name = catalog.name, catalogId = catalog.id, lastFetched = System.currentTimeMillis(), error = "", errorKey = null))
     }
-    @Synchronized fun failed(key: String, message: String) { update(source(key).copy(error = message.take(180))) }
+    @Synchronized fun failed(key: String, message: String, errorKey: String? = null) {
+        update(source(key).copy(error = message.take(180), errorKey = errorKey))
+    }
     @Synchronized fun toggle(key: String) { val record = source(key); update(record.copy(enabled = !record.enabled)) }
     @Synchronized fun reorder(keys: List<String>) {
         require(keys.size == state.records.size && keys.distinct().size == keys.size && keys.toSet() == state.records.map { it.key }.toSet())

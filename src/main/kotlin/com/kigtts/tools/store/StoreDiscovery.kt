@@ -9,7 +9,7 @@ internal fun discover(entries: List<CatalogEntry>, view: StoreView, installed: M
     .filter { entry -> installed[entry.item.id]?.builtin != true && (view.source == null || entry.source.key == view.source) &&
         (view.category == null || entry.item.section == view.category) &&
         (view.query.isBlank() || entry.item.localized(copy.locale).let {
-            listOf(it.name, it.summary, entry.item.name, entry.item.summary, entry.item.section, copy.sectionLabel(entry.item.section), entry.item.tags.joinToString()).any { field ->
+            listOf(it.name, it.summary, entry.item.name, entry.item.summary, entry.item.section, copy.sectionLabel(entry.item.section), it.tags.joinToString(), entry.item.tags.joinToString()).any { field ->
                 field.contains(view.query, ignoreCase = true)
             }
         }) &&

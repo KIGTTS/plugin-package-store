@@ -16,7 +16,7 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
     "sources" -> PluginPage(id, copy.text("plugin_sources"), commonStatus(jobs, copy) + listOfNotNull(view.sourceNotice.takeIf { it.isNotBlank() }?.let { PageBlock.Notice(it) }) + listOf(
         PageBlock.Actions(listOf(PageAction("add-source", copy.text("add_source"), PluginIcon.ADD), PageAction("refresh", copy.text("refresh_all"), PluginIcon.EXPORT)))),
         management = ManagementList("sources", sources.records().map { source ->
-            ManagementItem(source.key, source.name, source.error.ifBlank { sources.catalog(source.key)?.packages?.size?.let { copy.text("item_count", "count" to (it).toString()) } ?: copy.text("not_refreshed") },
+            ManagementItem(source.key, sources.sourceName(source, copy.locale), source.displayError(copy).ifBlank { sources.catalog(source.key)?.packages?.size?.let { copy.text("item_count", "count" to (it).toString()) } ?: copy.text("not_refreshed") },
                 icon = PluginIcon.NONE, image = jobs.icon(sources.catalog(source.key), sources.catalog(source.key)?.icon),
                 symbol = sources.catalog(source.key)?.icon?.symbol, primaryAction = "browse-source/${source.key}",
                 actions = listOf(PageAction("refresh/${source.key}", copy.text("refresh"), PluginIcon.EXPORT), PageAction("source-remove/${source.key}", copy.text("remove"), PluginIcon.CLOSE)),
@@ -38,9 +38,9 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
     onEnterAction = when { id == "store" -> "store-enter"; id.startsWith("catalog/") || id in setOf("search", "library", "updates", "downloads", "package") -> "downloads-enter"; else -> null })
 internal fun commonStatus(jobs: StoreJobs, copy: StoreCopy = StoreCopy.Chinese): List<PageBlock> = buildList {
     if (jobs.busy && !jobs.refreshing && jobs.status.isNotEmpty()) {
-        add(PageBlock.Notice(jobs.progress?.let { "${jobs.status} · ${(it.bytes * 100 / it.total).coerceIn(0, 100)}%" } ?: jobs.status))
+        add(PageBlock.Notice(jobs.progress?.let { "${jobs.status(copy)} · ${(it.bytes * 100 / it.total).coerceIn(0, 100)}%" } ?: jobs.status(copy)))
         add(PageBlock.Actions(listOf(PageAction("cancel-job", copy.text("cancel"), PluginIcon.CLOSE))))
     }
-    if (jobs.error.isNotEmpty()) add(PageBlock.Notice(jobs.error))
+    if (jobs.error.isNotEmpty()) add(PageBlock.Notice(jobs.error(copy)))
     if (jobs.pendingPlan != null) add(PageBlock.Actions(listOf(PageAction("show-plan", copy.text("show_plan"), PluginIcon.ADD))))
 }

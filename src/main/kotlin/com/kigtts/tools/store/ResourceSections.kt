@@ -11,7 +11,7 @@ internal fun resourceSectionsPage(id: String, sources: SourceStore, jobs: StoreJ
             it.kind == SourceKind.RESOURCES || it.packages.any { item -> item.resourceType != null }
         } == true }
         return PluginPage(id, copy.text("resource_sources"), commonStatus(jobs, copy) + PageBlock.Actions(listOf(actions.first())),
-            ManagementList(id, records.map { sourceSectionItem(it, sources, jobs) },
+            ManagementList(id, records.map { sourceSectionItem(it, sources, jobs, copy) },
                 emptyText = copy.text("empty_resource_sources"), style = ManagementListStyle.CATALOG))
     }
     return PluginPage(id, copy.text("resources"), commonStatus(jobs, copy) + PageBlock.Actions(actions), ManagementList(id,

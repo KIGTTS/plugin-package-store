@@ -8,10 +8,10 @@ internal fun installationPlanPage(id: String, sources: SourceStore, jobs: StoreJ
         PageBlock.Notice(if (jobs.busy) copy.text("install_resolving") else copy.text("install_choose")))
     val ready = jobs.prepared != null
     val blocks = buildList<PageBlock> {
-        if (jobs.error.isNotEmpty()) add(PageBlock.Notice(jobs.error))
+        if (jobs.error.isNotEmpty()) add(PageBlock.Notice(jobs.error(copy)))
         if (jobs.busy) add(PageBlock.Notice(jobs.progress?.let {
-            "${jobs.status} · ${(it.bytes * 100 / it.total.coerceAtLeast(1)).coerceIn(0, 100)}%"
-        } ?: jobs.status))
+            "${jobs.status(copy)} · ${(it.bytes * 100 / it.total.coerceAtLeast(1)).coerceIn(0, 100)}%"
+        } ?: jobs.status(copy)))
         if (plan.ordered.size > 1 && !ready) add(PageBlock.Notice(copy.text("install_requires")))
         if (plan.downgrades.isNotEmpty()) add(PageBlock.Notice(copy.text("install_older", "packages" to plan.downgrades.joinToString())))
         add(PageBlock.Group("", listOf(PageBlock.Actions(if (jobs.busy) listOf(

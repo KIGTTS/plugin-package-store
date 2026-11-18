@@ -5,7 +5,6 @@ import com.kigtts.plugin.api.PluginJson
 import com.kigtts.plugin.api.ResourceType
 import kotlinx.serialization.Serializable
 import java.net.URI
-import java.util.Locale
 
 @Serializable enum class PackageFormat { NATIVE, LUA, RESOURCE }
 @Serializable enum class SourceKind { PLUGINS, RESOURCES }
@@ -16,7 +15,8 @@ import java.util.Locale
     val dependencies: Map<String, String> = emptyMap(),
     val permissions: List<String>? = null, val permissionPurposes: Map<String, String> = emptyMap())
 @Serializable data class CatalogPackageTranslation(val name: String? = null, val summary: String? = null,
-    val description: String? = null, val thumbnails: List<String>? = null)
+    val description: String? = null, val thumbnails: List<String>? = null,
+    val tags: List<String>? = null, val releaseNotes: Map<String, String> = emptyMap())
 @Serializable data class CatalogPackage(val id: String, val name: String, val summary: String, val releases: List<PackageRelease>,
     val category: String = "扩展", val tags: List<String> = emptyList(), val license: String = "MIT", val homepage: String = "",
     val icon: CatalogIcon? = null, val description: String = "", val thumbnails: List<String> = emptyList(),
@@ -24,48 +24,37 @@ import java.util.Locale
     val section get() = resourceType?.label ?: category
 }
 
-/** Only visible metadata is translated. Install identity, releases, categories and tags remain unchanged. */
-internal fun CatalogPackage.localized(locale: String): CatalogPackage {
-    var tag = Locale.forLanguageTag(locale).toLanguageTag()
-    while (tag.isNotBlank() && tag != "und") {
-        localizations.entries.firstOrNull { it.key.equals(tag, ignoreCase = true) }?.value?.let {
-            return copy(name = it.name ?: name, summary = it.summary ?: summary,
-                description = it.description ?: it.summary ?: description, thumbnails = it.thumbnails ?: thumbnails)
-        }
-        tag = tag.substringBeforeLast('-', "")
-    }
-    return this
-}
 @Serializable data class SourceLinkPolicy(val requireAddition: Boolean = false, val recommendAfterInstall: Boolean = false)
 @Serializable data class PackageCatalog(val schemaVersion: Int = 1, val id: String, val name: String,
     val packages: List<CatalogPackage>, val description: String = "", val homepage: String = "", val updatedAt: String = "",
     val icon: CatalogIcon? = null, val readme: String = "", val assets: Map<String, CatalogImage> = emptyMap(),
-    val kind: SourceKind = SourceKind.PLUGINS, val linkPolicy: SourceLinkPolicy = SourceLinkPolicy())
+    val kind: SourceKind = SourceKind.PLUGINS, val linkPolicy: SourceLinkPolicy = SourceLinkPolicy(),
+    val localizations: Map<String, CatalogSourceTranslation> = emptyMap())
 
 object CatalogCodec {
     const val MAX_BYTES = 4 * 1024 * 1024
     val HASH = Regex("[a-f0-9]{64}")
     val ID = Regex("[a-z][a-z0-9.-]{0,63}")
     fun parse(bytes: ByteArray): PackageCatalog {
-        require(bytes.size <= MAX_BYTES) { "源目录超过 4 MiB" }
+        require(bytes.size <= MAX_BYTES) { throw StoreSourceIssue("source.issue.size", "源目录超过 4 MiB") }
         val catalog = PluginJson.decodeFromString<PackageCatalog>(bytes.toString(Charsets.UTF_8))
         validate(catalog); return catalog
     }
     fun validate(catalog: PackageCatalog) {
-        require(catalog.schemaVersion in 1..2) { "请更新插件商店以打开这个源" }
+        require(catalog.schemaVersion in 1..2) { throw StoreSourceIssue("source.issue.schema", "请更新插件商店以打开这个源") }
         require(catalog.schemaVersion == 2 || catalog.kind == SourceKind.PLUGINS)
         require(ID.matches(catalog.id) && catalog.name.length in 1..80 && catalog.description.length <= 1000)
         validateArtwork(catalog)
         if (catalog.homepage.isNotEmpty()) https(catalog.homepage)
-        require(catalog.packages.size <= 500 && catalog.packages.map { it.id }.distinct().size == catalog.packages.size) { "源内包 ID 重复或数量超过 500" }
+        require(catalog.packages.size <= 500 && catalog.packages.map { it.id }.distinct().size == catalog.packages.size) { throw StoreSourceIssue("source.issue.entries", "源内包 ID 重复或数量超过 500") }
         catalog.packages.forEach { item ->
             require(item.resourceType == null || catalog.schemaVersion == 2)
-            require(catalog.kind != SourceKind.RESOURCES || item.resourceType != null) { "资源源只能包含资源包" }
+            require(catalog.kind != SourceKind.RESOURCES || item.resourceType != null) { throw StoreSourceIssue("source.issue.resources", "资源源只能包含资源包") }
             require(ID.matches(item.id) && item.name.length in 1..80 && item.summary.length <= 1000 && item.category.length in 1..40)
             require(item.tags.size <= 16 && item.tags.all { it.length in 1..40 } && item.license.length in 1..80)
             if (item.homepage.isNotEmpty()) https(item.homepage)
-            require(item.releases.size in 1..64 && item.releases.map { it.versionCode }.distinct().size == item.releases.size) { "包版本号重复或版本数量无效" }
-            require(item.releases.map { it.version }.distinct().size == item.releases.size) { "包版本名称重复" }
+            require(item.releases.size in 1..64 && item.releases.map { it.versionCode }.distinct().size == item.releases.size) { throw StoreSourceIssue("source.issue.version_codes", "包版本号重复或版本数量无效") }
+            require(item.releases.map { it.version }.distinct().size == item.releases.size) { throw StoreSourceIssue("source.issue.version_names", "包版本名称重复") }
             item.releases.forEach { release ->
                 require((release.format == PackageFormat.RESOURCE) == (item.resourceType != null)) { "资源类型与安装包格式不一致" }
                 if (release.format == PackageFormat.RESOURCE) {
@@ -73,23 +62,25 @@ object CatalogCodec {
                 }
                 require(release.version.length in 1..64 && release.versionCode > 0)
                 SemVersion.parse(release.version)
-                require(HASH.matches(release.sha256) && HASH.matches(release.expectedPublisher)) { "包与发布者的 SHA-256 必须填写 64 位小写十六进制值" }
+                require(HASH.matches(release.sha256) && HASH.matches(release.expectedPublisher)) { throw StoreSourceIssue("source.issue.hash", "包与发布者的 SHA-256 必须填写 64 位小写十六进制值") }
                 require(release.bytes in 1..256L * 1024 * 1024 && release.notes.length <= 2000)
                 require(release.apiVersion > 0 && release.minSdk in 26..99)
                 require(release.abis.size <= 8 && release.abis.all { it in setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") })
-                require(release.mirrors.size in 1..8 && release.mirrors.map { https(it.url) }.distinct().size == release.mirrors.size) { "镜像重复或数量无效" }
+                require(release.mirrors.size in 1..8 && release.mirrors.map { https(it.url) }.distinct().size == release.mirrors.size) { throw StoreSourceIssue("source.issue.mirrors", "镜像重复或数量无效") }
                 release.mirrors.forEach { require(it.name.length in 1..80) }
                 require(release.dependencies.size <= 32 && release.dependencies.keys.all(ID::matches))
                 release.dependencies.values.forEach(VersionRange::parse)
                 validatePermissions(release)
-                if (release.format == PackageFormat.LUA) require("runtime.lua" in release.dependencies) { "Lua 包需声明 runtime.lua 前置依赖" }
+                if (release.format == PackageFormat.LUA) require("runtime.lua" in release.dependencies) { throw StoreSourceIssue("source.issue.runtime", "Lua 包需声明 runtime.lua 前置依赖") }
             }
         }
     }
     fun https(value: String): String {
         require(value.length in 1..2048)
-        val uri = URI(value.trim())
-        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) { "地址需为不含帐号和片段的 HTTPS URL" }
+        val uri = try { URI(value.trim()) } catch (_: java.net.URISyntaxException) {
+            throw StoreSourceIssue("source.issue.address", "地址需为不含帐号和片段的 HTTPS URL")
+        }
+        require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) { throw StoreSourceIssue("source.issue.address", "地址需为不含帐号和片段的 HTTPS URL") }
         return uri.toASCIIString()
     }
 }

@@ -18,6 +18,10 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     private val previewQueue = linkedSetOf<String>()
     private var refreshingAll = false
     private var closed = false
+    @Volatile private var statusValues: Map<String, String> = emptyMap()
+    @Volatile private var errorKey: String? = null
+    internal fun status(copy: StoreCopy) = copy.text(status, *statusValues.toList().toTypedArray())
+    internal fun error(copy: StoreCopy) = errorKey?.let(copy::text) ?: copy.text("operation_failed")
     @Volatile var status: String = ""; private set
     @Volatile var error: String = ""; private set
     @Volatile var progress: DownloadState? = null; private set
@@ -31,7 +35,7 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         if (closed || refreshingAll) return
         if (busy) refreshOnIdle = true else refresh()
     }
-    @Synchronized fun refresh(key: String? = null) = start("正在更新源", refreshAll = key == null, sourceRefresh = true) {
+    @Synchronized fun refresh(key: String? = null) = start("source.jobs.refresh", refreshAll = key == null, sourceRefresh = true) {
         refreshInstalled()
         val records = if (key == null) sources.records().filter { it.enabled } else listOf(sources.source(key))
         records.forEach { source ->
@@ -43,8 +47,9 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             catch (cancel: CancellationException) { throw cancel }
             catch (failure: Exception) {
                 currentCoroutineContext().ensureActive()
-                val message = failure.message?.takeIf { it.any { character -> character in '\u4e00'..'\u9fff' } } ?: "源暂时无法更新，请检查地址与目录格式"
-                sources.failed(source.key, message)
+                val issue = failure as? StoreSourceProblem
+                sources.failed(source.key, failure.message?.takeIf { issue != null } ?: "源暂时无法更新，请检查地址与目录格式",
+                    issue?.key ?: "source.issue.refresh")
             }
             changed()
         }
@@ -56,18 +61,19 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         if (busy) { previewQueue += source.key; return }
         refresh(source.key)
     }
-    @Synchronized fun prepare(entry: CatalogEntry, versionCode: Int) = start("正在检查前置依赖") {
+    @Synchronized fun prepare(entry: CatalogEntry, versionCode: Int) = start("source.jobs.dependencies") {
         prepared = null; pendingPlan = null; refreshInstalled()
         pendingPlan = DependencyResolver(sources.allEntries(), installed, device).resolve(entry, versionCode)
     }
     /** Downloads only the exact dependency/version snapshot the user has reviewed. */
     @Synchronized fun downloadPlan() {
-        val plan = requireNotNull(pendingPlan) { "请先检查安装计划" }
-        start("正在下载安装包") {
+        val plan = requireNotNull(pendingPlan) { throw StoreSourceIssue("source.issue.check_plan", "请先检查安装计划") }
+        start("source.jobs.download") {
         prepared = null
         val artifacts = mutableListOf<Pair<PlannedRelease, VerifiedArtifact>>()
         plan.ordered.forEach { selected ->
-            status = "正在下载 ${selected.entry.item.name} ${selected.release.version}"; changed()
+            statusValues = mapOf("name" to selected.entry.item.name, "version" to selected.release.version)
+            status = "source.jobs.package"; changed()
             var lastNotification = 0L
             val file = downloader.packageFile(selected.entry, selected.release) { next ->
                 progress = next
@@ -83,14 +89,17 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
     @Synchronized fun reloadInstalled() { if (!busy && !closed) start("") { refreshInstalled() } }
     private fun start(label: String, refreshAll: Boolean = false, sourceRefresh: Boolean = false, work: suspend () -> Unit) {
         check(!closed)
-        check(!busy) { "请等待当前任务完成或先取消" }
+        check(!busy) { throw StoreSourceIssue("source.issue.busy", "请等待当前任务完成或先取消") }
         refreshingAll = refreshAll
         refreshing = sourceRefresh
-        error = ""; status = label
+        error = ""; errorKey = null; statusValues = emptyMap(); status = label
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try { work() }
             catch (cancel: CancellationException) { throw cancel }
-            catch (failure: Exception) { if (currentCoroutineContext().isActive) error = failure.message?.take(200) ?: "操作暂时无法完成" }
+            catch (failure: Exception) { if (currentCoroutineContext().isActive) {
+                errorKey = (failure as? StoreSourceProblem)?.key
+                error = failure.message?.take(200) ?: "操作暂时无法完成"
+            } }
             finally {
                 synchronized(this@StoreJobs) {
                     progress = null; status = ""; active = null; refreshingAll = false; refreshing = false

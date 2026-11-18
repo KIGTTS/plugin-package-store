@@ -10,6 +10,12 @@ import kotlinx.serialization.Serializable
 internal fun validateArtwork(catalog: PackageCatalog) {
     require(catalog.assets.size <= 128 && catalog.assets.values.sumOf { it.bytes.coerceAtLeast(0) } <= 64L * 1024 * 1024) { "源图片超过64MiB或128项" }
     require(catalog.readme.length <= 32000) { "源介绍过长" }
+    require(catalog.localizations.size <= 12)
+    catalog.localizations.forEach { (tag, translation) ->
+        require(localeTag.matches(tag))
+        require(translation.name == null || translation.name.length in 1..160)
+        require((translation.description?.length ?: 0) <= 1000 && (translation.readme?.length ?: 0) <= 32000)
+    }
     catalog.assets.forEach { (id, image) ->
         require(id.matches(Regex("[a-z0-9][a-z0-9._-]{0,63}"))) { "图片标识不合法" }
         CatalogCodec.https(image.url)
@@ -29,11 +35,18 @@ internal fun validateArtwork(catalog: PackageCatalog) {
         require(item.thumbnails.all { it in catalog.assets }) { "缩略图引用的图片未注册" }
         require(item.localizations.size <= 32)
         item.localizations.forEach { (tag, translation) ->
-            require(tag.length <= 80 && tag.matches(Regex("[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8}){0,5}")))
+            require(localeTag.matches(tag))
             require(translation.name == null || translation.name.length in 1..80)
             require((translation.summary?.length ?: 0) <= 1000 && (translation.description?.length ?: 0) <= 32000)
+            require(translation.tags.orEmpty().let { it.size <= 16 && it.all { tag -> tag.length in 1..40 } })
+            val versions = item.releases.map { it.version }.toSet()
+            require(translation.releaseNotes.size <= 64 && translation.releaseNotes.all { (version, note) ->
+                version in versions && note.length in 1..2000
+            })
             val images = translation.thumbnails.orEmpty()
             require(images.size <= 8 && images.distinct().size == images.size && images.all { it in catalog.assets })
         }
     }
 }
+
+private val localeTag = Regex("[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8}){0,5}")
