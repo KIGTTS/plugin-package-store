@@ -39,7 +39,7 @@ internal fun discoveryPage(sources: SourceStore, jobs: StoreJobs, view: StoreVie
         ManagementList(key, visible.map { entry ->
             storeItem(entry, sources.catalog(entry.source.key), jobs, copy = copy)
         }, emptyText = if (all.isEmpty()) copy.text("empty_store") else copy.text("no_matches"), filters = filters,
-            style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
+            style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device, copy),
             shortcuts = storeShortcuts(copy), loadMore = if (grouped) null else storeLoadMore(view, key, entries.size),
             sectionActions = if (grouped) entries.map { it.item.section }.distinct().associate { category ->
                 copy.sectionLabel(category) to PageAction("open-catalog/${catalogPageId(category = category)}", copy.text("more"), symbol = "chevron_right")
@@ -60,7 +60,7 @@ internal fun libraryPage(id: String, sources: SourceStore, jobs: StoreJobs, view
             group = copy.text("installed"), copy = copy) } + if (updating) emptyList() else jobs.installed.values.filter { installed -> !installed.builtin && entries.none { it.item.id == installed.id } }.sortedBy { it.id }.map { installed ->
                 ManagementItem(installed.id, installed.id, copy.text("installed_other", "version" to (installed.version).toString()), icon = PluginIcon.MENU, primaryAction = "manage-plugins")
             },
-            emptyText = if (updating) copy.text("up_to_date") else copy.text("empty_library"), style = ManagementListStyle.CATALOG, itemActions = downloadActions(entries, jobs, device)))
+            emptyText = if (updating) copy.text("up_to_date") else copy.text("empty_library"), style = ManagementListStyle.CATALOG, itemActions = downloadActions(entries, jobs, device, copy)))
 }
 
 internal fun storeSettingsPage(jobs: StoreJobs, copy: StoreCopy = StoreCopy.Chinese) = PluginPage("store-settings", copy.text("store_settings"), commonStatus(jobs, copy) + listOf(

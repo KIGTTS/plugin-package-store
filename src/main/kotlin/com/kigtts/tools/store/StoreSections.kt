@@ -67,6 +67,6 @@ internal fun catalogListingPage(id: String, sources: SourceStore, jobs: StoreJob
     val visible = entries.take(storeLimit(view, id))
     return PluginPage(id, scope.category?.let(copy::sectionLabel) ?: scope.source?.let { sources.source(it).name } ?: copy.text("all_plugins"),
         commonStatus(jobs, copy), ManagementList(id, visible.map { storeItem(it, sources.catalog(it.source.key), jobs, copy = copy) },
-            emptyText = copy.text("no_plugins"), style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
+            emptyText = copy.text("no_plugins"), style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device, copy),
             loadMore = storeLoadMore(view, id, entries.size)))
 }

@@ -48,6 +48,7 @@ class StoreSectionsTest {
             val localized = translated("store").management!!
             assertEquals(home.filters.map { it.id }, localized.filters.map { it.id })
             assertEquals(audio, localized.filters.last().label)
+            assertTrue(localized.itemActions.values.none { it.label == "获取" })
             assertTrue(localized.items.any { it.group == audio })
             assertEquals(home.sectionActions.getValue("音频").id, localized.sectionActions.getValue(audio).id)
             assertEquals(audio, translated(id).title)

@@ -10,7 +10,7 @@ internal fun storeSearchPage(sources: SourceStore, jobs: StoreJobs, view: StoreV
     return PluginPage("search", copy.text("search_plugins"), commonStatus(jobs, copy),
         management = ManagementList(key, visible.map { storeItem(it, sources.catalog(it.source.key), jobs, copy = copy) },
             emptyText = if (view.query.isBlank()) copy.text("search_hint") else copy.text("no_results"),
-            style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device),
+            style = ManagementListStyle.CATALOG, itemActions = downloadActions(visible, jobs, device, copy),
             loadMore = storeLoadMore(view, key, results.size)),
         search = PluginSearch(view.query, "search-save", copy.text("search_plugins")))
 }

@@ -11,7 +11,7 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
     "search" -> storeSearchPage(sources, jobs, view, device, copy)
     "library", "updates" -> libraryPage(id, sources, jobs, view, device, copy)
     "store-settings" -> storeSettingsPage(jobs, copy)
-    "downloads" -> downloadManagementPage(jobs, sources)
+    "downloads" -> downloadManagementPage(jobs, sources, copy)
     "download-storage" -> downloadsPage(jobs, copy)
     "sources" -> PluginPage(id, copy.text("plugin_sources"), commonStatus(jobs, copy) + listOfNotNull(view.sourceNotice.takeIf { it.isNotBlank() }?.let { PageBlock.Notice(it) }) + listOf(
         PageBlock.Actions(listOf(PageAction("add-source", copy.text("add_source"), PluginIcon.ADD), PageAction("refresh", copy.text("refresh_all"), PluginIcon.EXPORT)))),
