@@ -120,20 +120,21 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
         installed = reply.value["plugins"]?.jsonArray.orEmpty().mapNotNull { item ->
             runCatching {
                 val value = item.jsonObject
-                if (value["installed"]?.jsonPrimitive?.booleanOrNull != true) return@runCatching null
+                if (value["installed"]?.jsonPrimitive?.booleanOrNull != true ||
+                    value["development"]?.jsonPrimitive?.booleanOrNull == true ||
+                    value["kind"]?.jsonPrimitive?.content == "lua") return@runCatching null
                 val id = value.getValue("id").jsonPrimitive.content
                 if (isPausedPackage(id)) return@runCatching null
                 InstalledPackage(id, value.getValue("version").jsonPrimitive.content,
                     value["versionCode"]?.jsonPrimitive?.intOrNull ?: 0, value["enabled"]?.jsonPrimitive?.booleanOrNull ?: false,
                     value["publisherSha256"]?.jsonPrimitive?.contentOrNull ?: value["publisher"]?.jsonPrimitive?.contentOrNull,
                     value["apiVersion"]?.jsonPrimitive?.intOrNull ?: PLUGIN_API_VERSION,
-                    if (value["kind"]?.jsonPrimitive?.content == "lua") PackageFormat.LUA else PackageFormat.NATIVE,
+                    PackageFormat.NATIVE,
                     value["builtin"]?.jsonPrimitive?.booleanOrNull == true)
             }.getOrNull()
         }.associateBy { it.id }
     }
     fun clearPrepared() { prepared = null; pendingPlan = null; changed() }
-    fun luaResources(artifact: VerifiedArtifact) = inspector.luaResources(artifact)
     @Synchronized fun cancel() { refreshOnIdle = false; previewQueue.clear(); active?.cancel(); downloader.cancel(); changed() }
     suspend fun close() { synchronized(this) { closed = true }; cancel(); active?.join(); scope.cancel() }
 }

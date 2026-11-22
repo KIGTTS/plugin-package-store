@@ -14,12 +14,12 @@ class InstalledMetadataTest {
         val submitted = PluginJson.parseToJsonElement("{\"accepted\":true,\"pending\":true}").jsonObject
         assertFalse(actualInstalled(submitted, selected))
     }
-    @Test fun luaRequiresManagedPackageInstalledMetadataRatherThanSubmission() {
-        val version = release().copy(format = PackageFormat.LUA)
+    @Test fun sourceAndDevelopmentProjectsDoNotCountAsPublishedPackages() {
+        val version = release()
         val selected = PlannedRelease(entry("test.lua", version), version)
         val installed = PluginJson.parseToJsonElement("""{"plugins":[{"id":"test.lua","version":"1.0.0","kind":"lua","installed":true}]}""").jsonObject
-        assertTrue(actualInstalled(installed, selected))
-        val draft = PluginJson.parseToJsonElement("""{"plugins":[{"id":"test.lua","version":"1.0.0","kind":"lua","installed":false}]}""").jsonObject
+        assertFalse(actualInstalled(installed, selected))
+        val draft = PluginJson.parseToJsonElement("""{"plugins":[{"id":"test.lua","version":"1.0.0","versionCode":1,"development":true,"installed":true}]}""").jsonObject
         assertFalse(actualInstalled(draft, selected))
     }
 }

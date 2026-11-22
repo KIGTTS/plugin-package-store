@@ -159,13 +159,7 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
             update(id) { it.copy(phase = StoreDownloadPhase.READY) }
             return PluginOutcome.Message((reply as? AppReply.Failure)?.message ?: "暂时无法添加，请重试")
         }
-        val lua = missing.first()
-        val result = environment.appBroker?.request(AppCommand.DeliverResource("runtime.lua", resource(inspector.luaResources(lua.second)), "import"))
-        if (result is AppReply.Failure || result == null) {
-            update(id) { it.copy(phase = StoreDownloadPhase.READY) }
-            return PluginOutcome.Message((result as? AppReply.Failure)?.message ?: "请先启用插件编辑器，再继续安装")
-        }
-        return PluginOutcome.RefreshUi
+        error("Source-only Lua releases are retired")
     }
     private suspend fun reconcileResource(task: StoreDownload) {
         val reply = environment.appBroker?.request(AppCommand.ResourcePackage("status", token = task.resourceToken))

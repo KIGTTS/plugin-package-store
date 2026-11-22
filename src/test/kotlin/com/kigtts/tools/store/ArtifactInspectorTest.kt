@@ -27,15 +27,13 @@ class ArtifactInspectorTest {
         val duplicate = signedFixture(temporary.root, extra = mapOf("assets/A.txt" to byteArrayOf(1), "assets/a.txt" to byteArrayOf(2)))
         assertThrows(IllegalArgumentException::class.java) { inspector.inspect(duplicate.file, duplicate.entry, duplicate.release) }
     }
-    @Test fun signedLuaExtractionDropsSignatureWithoutEvaluatingSource() {
-        val fixture = signedFixture(temporary.root, PackageFormat.LUA, extra = mapOf("assets/help.txt" to "help".toByteArray()))
-        val inspector = ArtifactInspector(PluginStorage(temporary.root)); val verified = inspector.inspect(fixture.file, fixture.entry, fixture.release)
-        val directory = inspector.luaResources(verified)
-        assertTrue(directory.resolve("manifest.json").isFile); assertEquals("return {}", directory.resolve("main.lua").readText())
-        assertFalse(directory.resolve("signature").exists()); assertTrue(directory.resolve("assets/help.txt").isFile)
+    @Test fun signedLuaPluginUsesTheNormalPackageRoute() {
+        val fixture = signedFixture(temporary.root, extra = mapOf("assets/lua-project/main.lua" to "return {}".toByteArray()))
+        val verified = ArtifactInspector(PluginStorage(temporary.root)).inspect(fixture.file, fixture.entry, fixture.release)
+        assertEquals(PackageFormat.NATIVE, verified.format)
     }
-    @Test fun invalidPayloadInLuaPackageIsRejectedBeforeDelivery() {
-        val fixture = signedFixture(temporary.root, PackageFormat.LUA, extra = mapOf("code/malicious.dex" to byteArrayOf(1)))
+    @Test fun legacySourceOnlyLuaPackageIsRejectedBeforeDelivery() {
+        val fixture = signedFixture(temporary.root, PackageFormat.LUA)
         assertThrows(IllegalArgumentException::class.java) { ArtifactInspector(PluginStorage(temporary.root)).inspect(fixture.file, fixture.entry, fixture.release) }
     }
     @Test fun modifiedCachedBytesFailBeforeSignatureOrInstall() {

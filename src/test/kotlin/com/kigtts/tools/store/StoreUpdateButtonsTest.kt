@@ -49,8 +49,7 @@ class StoreUpdateButtonsTest {
             Case(release(), old, false, "已安装"),
             Case(release("0.9.0"), old.copy(versionCode = 2), false, "安装"),
             Case(release("2.0.0", 2).copy(apiVersion = testDevice.api + 1), old, false, "不兼容"),
-            Case(lua.copy(versionCode = 2), old.copy(format = PackageFormat.LUA), false, "已安装"),
-            Case(lua, old.copy(format = PackageFormat.LUA, apiVersion = PLUGIN_API_VERSION - 1), true, "更新"),
+            Case(lua.copy(versionCode = 2), old.copy(format = PackageFormat.LUA), false, "不兼容"),
             Case(release(), null, false, "获取"))
         for (case in cases) {
             val (sources, jobs) = fixture(case.installed)
