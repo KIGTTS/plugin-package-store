@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.18")
+    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.19")
     override val localization = PluginLocalization(supportedLocales = listOf("zh-CN", "en", "ko", "ja"))
     private var strings: PluginStrings? = null
     private lateinit var environment: PluginEnvironment
@@ -90,6 +90,10 @@ class PackageStorePlugin : KigPlugin {
             "sources", "store-settings", "downloads", "download-storage", "library", "updates" -> { jobs.reloadInstalled(); PluginOutcome.OpenPage(prefix) }
             "manage-plugins" -> { val reply = requireNotNull(environment.appBroker).request(AppCommand.Navigate("plugins")); if (reply is AppReply.Failure) PluginOutcome.Message(reply.message) else PluginOutcome.RefreshUi }
             "browse" -> { view.offset = 0; PluginOutcome.OpenPage("store") }
+            "browse-expressions" -> {
+                jobs.entered()
+                PluginOutcome.OpenPage(catalogPageId(category = ResourceType.EXPRESSION.label))
+            }
             "font-library" -> openFontLibrary(sources, view, copy)
             "section" -> { require(id in setOf("categories", "all-categories", "source-sections", "resources", "resource-sources") || id.startsWith("categories/")); PluginOutcome.OpenPage(if (id == "all-categories") "categories" else id) }
             "open-catalog" -> { requireNotNull(catalogScope(id, sources)); PluginOutcome.OpenPage(id) }

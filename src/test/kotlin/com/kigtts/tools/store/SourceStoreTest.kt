@@ -12,8 +12,21 @@ class SourceStoreTest {
         val storage = PluginStorage(temporary.root)
         val first = SourceStore(storage)
         assertEquals(com.kigtts.plugin.api.OfficialPluginSource.URL, first.records().single { it.key == "kigtts-official" }.url)
-        assertEquals(2, first.records().size)
+        assertEquals(setOf("kigtts-official", "kigtts-resources", "kigtts-expressions"), first.records().map { it.key }.toSet())
         first.records().forEach { first.remove(it.key) }
+        assertTrue(SourceStore(storage).records().isEmpty())
+    }
+    @Test fun existingStoreAddsExpressionSourceOnceWithoutRestoringRemovedSources() {
+        val storage = PluginStorage(temporary.root)
+        storage.file("config/sources.json").apply {
+            parentFile!!.mkdirs()
+            writeText("""{"officialSourceSeeded":true,"resourceSourceSeeded":true}""")
+        }
+        val store = SourceStore(storage)
+        val expression = store.records().single()
+        assertEquals("kigtts.expressions", expression.catalogId)
+        assertTrue(expression.url.contains("/expressions.json"))
+        store.remove(expression.key)
         assertTrue(SourceStore(storage).records().isEmpty())
     }
     @Test fun deepLinkOnlyCreatesPendingUntilUserConfirms() {

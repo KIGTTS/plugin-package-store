@@ -56,6 +56,18 @@ class StoreSectionsTest {
             assertEquals(voice, translated("resources").management!!.items.first { it.id == "VOICE" }.title)
             assertTrue(translated("search", StoreView(query = audio)).management!!.items.any { it.group == audio })
         }
+        val ready = release().copy(format = PackageFormat.RESOURCE, apiVersion = 36)
+        val face = entry("test.expression", ready).item.copy(resourceType = ResourceType.EXPRESSION)
+        sources.fetched(a.key, catalog("a.source", *(packages + face).toTypedArray()).copy(schemaVersion = 2))
+        val expressionCopy = StoreCopy(strings, "en-US")
+        val section = storePage("resources", sources, jobs, view, testDevice, expressionCopy)!!.management!!
+            .items.single { it.id == "EXPRESSION" }
+        assertEquals("Face Effects", section.title)
+        val expressionPage = section.primaryAction!!.removePrefix("open-catalog/")
+        assertEquals(listOf("test.expression"), page(expressionPage).management!!.items.map { it.id })
+        assertFalse(ready.compatible(StoreDevice(36, setOf("arm64-v8a"), api = 35)))
+        sources.fetched(a.key, catalog("a.source", *packages.toTypedArray()))
+
         assertEquals(packages.take(12).map { it.id }, page(id).management!!.items.map { it.id })
         appendStoreBatch(view, id, 12)
         appendStoreBatch(view, id, 12) // Stale duplicate cannot skip a batch.
