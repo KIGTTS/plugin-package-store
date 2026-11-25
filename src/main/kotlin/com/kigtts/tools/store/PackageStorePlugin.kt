@@ -7,9 +7,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class PackageStorePlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "插件商店", "发现让 KIGTTS 更好用的插件", "0.16.19")
-    override val localization = PluginLocalization(supportedLocales = listOf("zh-CN", "en", "ko", "ja"))
+class PackageStorePlugin(private val bundledStrings: (() -> PluginStrings)? = null) : KigPlugin {
+    override val descriptor = PluginDescriptor("tools.package-store", "拓展市场", "浏览、安装和更新插件与资源", "0.17.0")
+    override val localization = PluginLocalization(supportedLocales = listOf("zh-CN", "zh-CN-x-casual", "en", "ko", "ja"))
     private var strings: PluginStrings? = null
     private lateinit var environment: PluginEnvironment
     private lateinit var sources: SourceStore
@@ -23,7 +23,7 @@ class PackageStorePlugin : KigPlugin {
     private fun changed() { changes.update { it + 1 } }
     override suspend fun attach(environment: PluginEnvironment) {
         this.environment = environment
-        strings = PluginStrings.fromAssets(environment.assets)
+        strings = bundledStrings?.invoke() ?: PluginStrings.fromAssets(environment.assets.resolve("market"))
         sources = SourceStore(environment.storage); device = StoreDevice(Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.toSet())
         val transport = HttpsStoreTransport { environment.requirePermission("network") }
         downloader = PackageDownloader(environment.storage, transport)
@@ -43,6 +43,7 @@ class PackageStorePlugin : KigPlugin {
     }
     override fun page(pageId: String, context: PluginContext): PluginPage? {
         val copy = StoreCopy(strings, context.locale)
+        if (!::sources.isInitialized) return null
         val page = if (pageId == "package") sourcePackagePage(sources, jobs, view, device, copy)
             ?: storePage(pageId, sources, jobs, view.copy(), device, copy) else storePage(pageId, sources, jobs, view.copy(), device, copy)
         return page?.let { current -> jobs.downloads?.automaticAction()?.let { current.copy(onEnterAction = it) } ?: current }
@@ -101,7 +102,7 @@ class PackageStorePlugin : KigPlugin {
                 appendStoreBatch(view, id.substringBeforeLast('/'), id.substringAfterLast('/').toInt())
                 PluginOutcome.RefreshUi
             }
-            "category" -> { view.category = if (id == "all") null else sources.entries().map { it.item.section }.first { categoryKey(it) == id }; view.offset = 0; PluginOutcome.RefreshUi }
+            "category" -> { view.category = if (id == "all") null else sources.categories().firstOrNull { categoryKey(it.id) == id }?.id; view.offset = 0; PluginOutcome.RefreshUi }
             "refresh" -> { if (id.isBlank()) jobs.entered() else jobs.refresh(id); PluginOutcome.RefreshUi }
             "source-toggle" -> { check(!jobs.busy); sources.toggle(id); view.offset = 0; PluginOutcome.RefreshUi }
             "source-remove" -> PluginOutcome.Menu(copy.text("remove_source"), listOf(PageAction("source-remove-confirm/$id", copy.text("remove"), PluginIcon.CLOSE)))

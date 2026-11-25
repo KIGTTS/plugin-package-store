@@ -23,8 +23,8 @@ class PackageCatalogTest {
         assertEquals("한국어 이름", item.localized("ko-KR").name)
         assertEquals(item, item.localized("de-DE"))
         assertThrows(IllegalArgumentException::class.java) { CatalogCodec.validate(source.copy(assets = emptyMap())) }
-        val copy = StoreCopy(PluginStrings.fromAssets(File("src/main/assets")), "en-US")
-        assertEquals("Plugin Store", copy.text("store"))
+        val copy = StoreCopy(PluginStrings.fromAssets(File("src/main/assets/market")), "en-US")
+        assertEquals("Extension Market", copy.text("store"))
         assertEquals("3 plugin updates available", copy.text("update_count", "count" to "3"))
     }
     @Test fun validMultipleVersionsMirrorsAndDependenciesRoundTrip() {

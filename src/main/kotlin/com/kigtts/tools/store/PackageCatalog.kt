@@ -20,7 +20,8 @@ import java.net.URI
 @Serializable data class CatalogPackage(val id: String, val name: String, val summary: String, val releases: List<PackageRelease>,
     val category: String = "扩展", val tags: List<String> = emptyList(), val license: String = "MIT", val homepage: String = "",
     val icon: CatalogIcon? = null, val description: String = "", val thumbnails: List<String> = emptyList(),
-    val resourceType: ResourceType? = null, val localizations: Map<String, CatalogPackageTranslation> = emptyMap()) {
+    val resourceType: ResourceType? = null, val localizations: Map<String, CatalogPackageTranslation> = emptyMap(),
+    val categoryId: String? = null) {
     val section get() = resourceType?.label ?: category
 }
 
@@ -29,7 +30,8 @@ import java.net.URI
     val packages: List<CatalogPackage>, val description: String = "", val homepage: String = "", val updatedAt: String = "",
     val icon: CatalogIcon? = null, val readme: String = "", val assets: Map<String, CatalogImage> = emptyMap(),
     val kind: SourceKind = SourceKind.PLUGINS, val linkPolicy: SourceLinkPolicy = SourceLinkPolicy(),
-    val localizations: Map<String, CatalogSourceTranslation> = emptyMap())
+    val localizations: Map<String, CatalogSourceTranslation> = emptyMap(),
+    val categories: List<CatalogCategory> = emptyList())
 
 object CatalogCodec {
     const val MAX_BYTES = 4 * 1024 * 1024
@@ -45,6 +47,7 @@ object CatalogCodec {
         require(catalog.schemaVersion == 2 || catalog.kind == SourceKind.PLUGINS)
         require(ID.matches(catalog.id) && catalog.name.length in 1..80 && catalog.description.length <= 1000)
         validateArtwork(catalog)
+        validateCategories(catalog)
         if (catalog.homepage.isNotEmpty()) https(catalog.homepage)
         require(catalog.packages.size <= 500 && catalog.packages.map { it.id }.distinct().size == catalog.packages.size) { throw StoreSourceIssue("source.issue.entries", "源内包 ID 重复或数量超过 500") }
         catalog.packages.forEach { item ->
@@ -84,7 +87,7 @@ object CatalogCodec {
         return uri.toASCIIString()
     }
 }
-data class CatalogEntry(val source: SourceRecord, val item: CatalogPackage)
+data class CatalogEntry(val source: SourceRecord, val item: CatalogPackage, val category: CatalogCategory = legacyCategory(item))
 data class InstalledPackage(val id: String, val version: String, val versionCode: Int, val enabled: Boolean, val publisher: String? = null,
     val apiVersion: Int = PLUGIN_API_VERSION, val format: PackageFormat = PackageFormat.NATIVE, val builtin: Boolean = false)
 internal fun PackageRelease.compatible(device: StoreDevice) = format != PackageFormat.LUA &&

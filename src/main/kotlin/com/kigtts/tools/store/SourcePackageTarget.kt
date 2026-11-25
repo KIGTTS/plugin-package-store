@@ -22,7 +22,7 @@ internal fun sourcePackagePage(sources: SourceStore, jobs: StoreJobs, view: Stor
         catalog == null -> copy.text("source.issue.refresh")
         else -> copy.text("source.preview.removed")
     })
-    val entry = CatalogEntry(source, item)
+    val entry = CatalogEntry(source, item, catalog.category(item))
     if (view.selected?.source?.key != source.key || view.selected?.item?.id != item.id) {
         view.selectedVersion = entry.latest(device)?.versionCode
     }

@@ -1,6 +1,6 @@
 {
-  "store": "Plugin Store",
-  "summary": "Find, install and update plugins",
+  "store": "Extension Market",
+  "summary": "Browse, install and update plugins and resources",
   "search": "Search",
   "library": "My plugins",
   "downloads": "Downloads",
@@ -21,7 +21,7 @@
   "installed": "Installed",
   "up_to_date": "Plugins in this catalog are up to date",
   "empty_library": "Your installed plugins will appear here",
-  "store_settings": "Store settings",
+  "store_settings": "Market settings",
   "content_sources": "Content sources",
   "plugin_sources": "Plugin sources",
   "download_storage": "Downloads and storage",

@@ -10,13 +10,13 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
     return when (id) {
         "package" -> PluginPage(id, entry.item.name, commonStatus(jobs, copy) + sourceRecommendation(sources, jobs, entry, copy) + listOf(
             PageBlock.Group(copy.text("overview"), listOf(markdown(entry.item.description.ifBlank { entry.item.summary }, catalog, jobs),
-                thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(copy.sectionLabel(entry.item.section)) + entry.item.tags).distinct().joinToString(" · "))) +
+                thumbnails(entry, catalog, jobs), PageBlock.Text((listOf(copy.categoryLabel(entry.category)) + entry.item.tags).distinct().joinToString(" · "))) +
                 listOfNotNull(installed?.let { PageBlock.Text(copy.text("detail_installed", "version" to (it.version).toString())) }) +
                 listOfNotNull(release?.takeUnless { it.compatible(device) }?.let {
                     PageBlock.Notice(copy.text("incompatible_version")) })),
             PageBlock.Group(copy.text("release_notes"), listOf(markdown(release?.let { entry.item.localizedNotes(it, copy.locale) }?.ifBlank { copy.text("no_release_notes") } ?: copy.text("no_compatible"), catalog, jobs),
                 PageBlock.Actions(listOf(PageAction("versions", copy.text("all_versions"), PluginIcon.NONE, "history"))))),
-            if (entry.item.resourceType == null) permissionDetails(release) else PageBlock.Text(copy.text("resource_available", "section" to copy.sectionLabel(entry.item.section))),
+            if (entry.item.resourceType == null) permissionDetails(release) else PageBlock.Text(copy.text("resource_available", "section" to copy.categoryLabel(entry.category))),
             PageBlock.Actions(listOf(PageAction("package-info", copy.text("compatibility"), PluginIcon.NONE, "info")))
         ), header = storeItem(entry, catalog, jobs, group = "").copy(primaryAction = null),
             headerAction = downloadAction(entry, jobs, device, release, detail = true, copy = copy))

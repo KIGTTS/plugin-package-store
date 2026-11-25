@@ -37,7 +37,7 @@ class StoreSectionsTest {
         assertEquals(listOf("apps", "category", "graphic_eq"), home.filters.map { it.symbol })
         assertEquals("graphic_eq", page("source-sections").management!!.items.first { it.id == a.key }.symbol)
         assertEquals(listOf("所有插件", "音频"), page("categories/${a.key}").management!!.items.map { it.title })
-        val strings = PluginStrings.fromAssets(File("src/main/assets"))
+        val strings = PluginStrings.fromAssets(File("src/main/assets/market"))
         for ((locale, audio, voice) in listOf(
             Triple("en-US", "Audio", "Voice Packs"),
             Triple("ko-KR", "오디오", "음성 팩"),
@@ -53,7 +53,6 @@ class StoreSectionsTest {
             assertEquals(home.sectionActions.getValue("音频").id, localized.sectionActions.getValue(audio).id)
             assertEquals(audio, translated(id).title)
             assertEquals(audio, translated("categories/${a.key}").management!!.items.last().title)
-            assertEquals(voice, translated("resources").management!!.items.first { it.id == "VOICE" }.title)
             assertTrue(translated("search", StoreView(query = audio)).management!!.items.any { it.group == audio })
         }
         val ready = release().copy(format = PackageFormat.RESOURCE, apiVersion = 36)
@@ -61,7 +60,7 @@ class StoreSectionsTest {
         sources.fetched(a.key, catalog("a.source", *(packages + face).toTypedArray()).copy(schemaVersion = 2))
         val expressionCopy = StoreCopy(strings, "en-US")
         val section = storePage("resources", sources, jobs, view, testDevice, expressionCopy)!!.management!!
-            .items.single { it.id == "EXPRESSION" }
+            .items.single { it.id == "resource.expression" }
         assertEquals("Face Effects", section.title)
         val expressionPage = section.primaryAction!!.removePrefix("open-catalog/")
         assertEquals(listOf("test.expression"), page(expressionPage).management!!.items.map { it.id })

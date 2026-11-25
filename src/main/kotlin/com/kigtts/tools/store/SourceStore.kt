@@ -76,8 +76,28 @@ class SourceStore(private val storage: PluginStorage, private val builtinSources
     }
     @Synchronized fun source(key: String) = state.records.firstOrNull { it.key == key } ?: previews[key] ?: throw StoreSourceStateIssue("source.issue.missing", "源不存在")
     @Synchronized fun catalog(key: String) = catalogs[key]?.let { it.copy(packages = it.packages.filterNot { item -> isPausedPackage(item.id) }) }
-    @Synchronized fun entries() = state.records.filter { it.enabled }.flatMap(::visibleEntries)
-    private fun visibleEntries(source: SourceRecord) = catalog(source.key)?.packages.orEmpty().map { CatalogEntry(source, it) }
+    @Synchronized fun categories(sourceKey: String? = null): List<CatalogCategory> {
+        val available = state.records.filter { it.enabled && (sourceKey == null || it.key == sourceKey) }
+            .flatMap { source -> catalog(source.key)?.availableCategories().orEmpty() }
+        return available.groupBy { it.kind to it.id }.values.map { values ->
+            val preferred = values.first()
+            val translations = linkedMapOf<String, String>()
+            values.forEach { category -> category.localizations.forEach { (tag, label) ->
+                translations.putIfAbsent(tag.lowercase(java.util.Locale.ROOT), label)
+            } }
+            preferred.copy(symbol = values.firstNotNullOfOrNull { it.symbol }, localizations = translations)
+        }.sortedWith(compareBy<CatalogCategory> { it.name }.thenBy { it.id })
+    }
+
+    @Synchronized fun entries(): List<CatalogEntry> {
+        val merged = categories().associateBy { it.kind to it.id }
+        return state.records.filter { it.enabled }.flatMap(::visibleEntries).map { entry ->
+            entry.copy(category = merged[entry.category.kind to entry.category.id] ?: entry.category)
+        }
+    }
+    private fun visibleEntries(source: SourceRecord) = catalog(source.key)?.let { catalog ->
+        catalog.packages.map { CatalogEntry(source, it, catalog.category(it)) }
+    }.orEmpty()
     @Synchronized fun fetched(key: String, catalog: PackageCatalog) {
         CatalogCodec.validate(catalog)
         val previous = source(key)

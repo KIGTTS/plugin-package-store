@@ -15,7 +15,9 @@ internal fun resourceSectionsPage(id: String, sources: SourceStore, jobs: StoreJ
                 emptyText = copy.text("empty_resource_sources"), style = ManagementListStyle.CATALOG))
     }
     return PluginPage(id, copy.text("resources"), commonStatus(jobs, copy) + PageBlock.Actions(actions), ManagementList(id,
-        ResourceType.entries.map { type -> ManagementItem(type.name, copy.resourceTypeLabel(type), icon = PluginIcon.NONE,
-            symbol = type.symbol, primaryAction = "open-catalog/${catalogPageId(category = type.label)}") },
+        sources.categories().filter { it.kind == SourceKind.RESOURCES }.map { category ->
+            ManagementItem(category.id, copy.categoryLabel(category), icon = PluginIcon.NONE, symbol = category.symbol,
+                primaryAction = "open-catalog/${catalogPageId(category = category.id)}")
+        }, emptyText = copy.text("no_matches"),
         style = ManagementListStyle.CATALOG))
 }

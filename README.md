@@ -60,3 +60,9 @@ cd plugin-package-store
 Linux/macOS使用`./gradlew`。编译产物在`build/outputs/aar`，签名插件包在`build/plugin-packages`。发布私钥始终由维护者保管，不提交到本仓库；正式更新沿用既有发布者签名、插件ID与Appdata范围。已发布版本不可覆盖，发行新内容须增加版本号。
 
 [SDK与接口](https://github.com/KIGTTS/plugin-sdk) · [官方源](https://modelscope.cn/datasets/LHTSTUDIO/KIGTTS-Official-Plugins)
+
+## 拓展市场
+
+0.17 起可作为 KIGTTS 的内置模块运行。沿用原 `tools.package-store` 的存储标识，已添加的源、最后验证目录、下载记录和确认队列仍可使用。市场 UI 文案位于 `src/main/assets/market/i18n/`。
+
+源目录可以声明 `categories`，包通过 `categoryId` 引用。使用相同类型 ID 的已启用来源会合并为一个入口。类型 ID 与界面语言无关，显示名称、图标和译名由源提供。旧目录仍可用 `category` 和 `resourceType`。

@@ -1,8 +1,8 @@
 {
   "id": "tools.package-store",
-  "name": "插件商店",
-  "version": "0.16.19",
-  "versionCode": 41,
+  "name": "拓展市场",
+  "version": "0.17.0",
+  "versionCode": 42,
   "entryClass": "com.kigtts.tools.store.PackageStorePlugin",
   "apiVersion": 36,
   "minSdk": 26,
