@@ -16,7 +16,7 @@ import java.util.UUID
 class SourceStore(private val storage: PluginStorage, private val builtinSources: List<SourceRecord> = listOf(SourceRecord(key = "kigtts-official", url = com.kigtts.plugin.api.OfficialPluginSource.URL,
     name = com.kigtts.plugin.api.OfficialPluginSource.NAME, catalogId = com.kigtts.plugin.api.OfficialPluginSource.ID), SourceRecord(key = "kigtts-resources", url = "https://modelscope.cn/datasets/LHTSTUDIO/KIGTTS-Resources/resolve/master/index.json?view=false", name = "KIGTTS 资源", catalogId = "kigtts.resources"),
     SourceRecord(key = "kigtts-expressions", url = "https://modelscope.cn/datasets/LHTSTUDIO/KIGTTS-Resources/resolve/master/expressions.json?view=false",
-        name = "KIGTTS 表情特效", catalogId = "kigtts.expressions"))) {
+        name = "KIGTTS 面部贴纸", catalogId = "kigtts.expressions"))) {
     private val configuration = storage.file("config/sources.json")
     private var state = read<SourceConfiguration>(configuration) ?: SourceConfiguration()
     private val catalogs = linkedMapOf<String, PackageCatalog>()

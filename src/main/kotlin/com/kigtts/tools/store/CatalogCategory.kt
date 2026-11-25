@@ -19,7 +19,7 @@ private val pluginCategories = mapOf(
     "输入" to "input", "开发" to "development", "扩展" to "extensions",
 )
 
-internal fun ResourceType.categoryId() = "resource." + name.lowercase(Locale.ROOT)
+internal fun ResourceType.categoryId() = "resource." + name.lowercase(Locale.ROOT).replace('_', '-')
 
 internal fun knownCategoryId(label: String): String {
     ResourceType.entries.firstOrNull { it.label == label }?.let { return it.categoryId() }
