@@ -28,7 +28,7 @@ internal fun knownCategoryId(label: String): String {
 
 private fun legacyPluginId(label: String): String {
     val normalized = Normalizer.normalize(label.trim(), Normalizer.Form.NFKC).lowercase(Locale.ROOT)
-    return pluginCategories[normalized]?.let { "plugin.$it" } ?: "legacy.plugin." + categoryKey(normalized)
+    return pluginCategories[normalized]?.let { "plugin.$it" } ?: "plugin.legacy." + categoryKey(normalized)
 }
 
 internal fun legacyCategory(item: CatalogPackage): CatalogCategory =
@@ -47,12 +47,11 @@ internal fun StoreCopy.categoryLabel(category: CatalogCategory): String {
     val local = sequenceOf(lang.toLanguageTag(), lang.language).mapNotNull { tag ->
         category.localizations.entries.firstOrNull { it.key.equals(tag, true) }?.value
     }.firstOrNull()
-    return local ?: when {
-        category.id.startsWith("resource.") && ResourceType.entries.any { it.categoryId() == category.id } ->
-            resourceTypeLabel(ResourceType.entries.first { it.categoryId() == category.id })
-        category.id in pluginCategories.values.map { "plugin.$it" } -> text("category." + category.id.removePrefix("plugin."))
-        else -> category.name
-    }
+    if (local != null) return local
+    val originalType = ResourceType.entries.firstOrNull { it.categoryId() == category.id && it.label == category.name }
+    if (originalType != null) return resourceTypeLabel(originalType)
+    val originalPlugin = pluginCategories[category.name]
+    return if (originalPlugin != null && category.id == "plugin.$originalPlugin") text("category.$originalPlugin") else category.name
 }
 
 internal fun validateCategories(catalog: PackageCatalog) {

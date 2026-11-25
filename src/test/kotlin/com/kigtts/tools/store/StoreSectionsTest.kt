@@ -61,7 +61,7 @@ class StoreSectionsTest {
         val expressionCopy = StoreCopy(strings, "en-US")
         val section = storePage("resources", sources, jobs, view, testDevice, expressionCopy)!!.management!!
             .items.single { it.id == "resource.expression" }
-        assertEquals("Face Effects", section.title)
+        assertEquals("Face stickers", section.title)
         val expressionPage = section.primaryAction!!.removePrefix("open-catalog/")
         assertEquals(listOf("test.expression"), page(expressionPage).management!!.items.map { it.id })
         assertFalse(ready.compatible(StoreDevice(36, setOf("arm64-v8a"), api = 35)))

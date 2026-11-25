@@ -74,7 +74,7 @@ private val fallback = PluginStrings(mapOf("zh-CN" to mapOf(
     "resource.stickers" to "贴纸包",
     "resource.card_frame" to "名片边框",
     "resource.font" to "字体",
-    "resource.expression" to "表情特效",
+    "resource.expression" to "面部贴纸",
     "resource_sources" to "资源来源",
     "empty_resource_sources" to "添加资源源，发现更多字幕、照片与声音",
     "sources" to "来源",
