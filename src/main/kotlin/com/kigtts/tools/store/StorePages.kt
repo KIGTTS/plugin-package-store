@@ -35,7 +35,14 @@ internal fun storePage(id: String, sources: SourceStore, jobs: StoreJobs, view: 
         else -> null
     }
 }?.copy(loading = jobs.busy, refreshAction = if (id in setOf("store", "library", "updates", "sources", "categories", "source-sections") || id.startsWith("categories/") || id.startsWith("catalog/")) "refresh" else null,
-    onEnterAction = when { id == "store" -> "store-enter"; id.startsWith("catalog/") || id in setOf("search", "library", "updates", "downloads", "package") -> "downloads-enter"; else -> null })
+    onEnterAction = when {
+        id == "store" -> "store-enter"
+        id.startsWith("catalog/") || id in setOf("search", "library", "updates", "downloads") -> "downloads-enter"
+        id == "package" && jobs.downloads?.tasks.orEmpty().any {
+            it.phase == StoreDownloadPhase.READY || it.phase == StoreDownloadPhase.INSTALLING
+        } -> "downloads-enter"
+        else -> null
+    })
 internal fun commonStatus(jobs: StoreJobs, copy: StoreCopy = StoreCopy.Chinese): List<PageBlock> = buildList {
     if (jobs.busy && !jobs.refreshing && jobs.status.isNotEmpty()) {
         add(PageBlock.Notice(jobs.progress?.let { "${jobs.status(copy)} · ${(it.bytes * 100 / it.total).coerceIn(0, 100)}%" } ?: jobs.status(copy)))

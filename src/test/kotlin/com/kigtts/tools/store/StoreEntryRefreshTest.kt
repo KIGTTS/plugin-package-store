@@ -63,5 +63,7 @@ class StoreEntryRefreshTest {
             assertEquals("refresh", page.refreshAction); assertFalse(page.loading)
         }
         assertNull(storePage("store-settings", sources, jobs, StoreView(), testDevice)!!.refreshAction)
+        val detail = StoreView(selected = sources.entries().single())
+        assertNull(storePage("package", sources, jobs, detail, testDevice)!!.onEnterAction)
     }
 }

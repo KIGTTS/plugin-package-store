@@ -2,10 +2,12 @@ package com.kigtts.tools.store
 
 import android.os.Build
 import com.kigtts.plugin.api.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class PackageStorePlugin(private val bundledStrings: (() -> PluginStrings)? = null) : KigPlugin {
     override val descriptor = PluginDescriptor("tools.package-store", "拓展市场", "浏览、安装和更新插件与资源", "0.17.0", apiVersion = 36)
@@ -119,8 +121,12 @@ class PackageStorePlugin(private val bundledStrings: (() -> PluginStrings)? = nu
             "package" -> {
                 view.linkTarget = null
                 val sourceKey = id.substringBefore('/'); val packageId = id.substringAfter('/')
-                view.selected = sources.allEntries().first { it.source.key == sourceKey && it.item.id == packageId }
-                view.selectedVersion = view.selected!!.latest(device)?.versionCode; PluginOutcome.OpenPage("package")
+                val entry = withContext(Dispatchers.IO) {
+                    sources.allEntries().first { it.source.key == sourceKey && it.item.id == packageId }
+                }
+                view.selected = entry
+                view.selectedVersion = entry.latest(device)?.versionCode
+                PluginOutcome.OpenPage("package")
             }
             "versions", "package-info" -> PluginOutcome.OpenPage(prefix)
             "version" -> { requireNotNull(view.selected).item.releases.single { it.versionCode == id.toInt() && it.compatible(device) }; view.selectedVersion = id.toInt(); PluginOutcome.OpenPage("package") }
