@@ -10,8 +10,15 @@ internal fun storeItem(entry: CatalogEntry, catalog: PackageCatalog?, jobs: Stor
     return ManagementItem(item.id, item.name, subtitle ?: item.summary, icon = if (item.icon == null) PluginIcon.NONE else PluginIcon.IMAGE,
         image = jobs.icon(catalog, item.icon), group = group ?: copy.categoryLabel(entry.category), primaryAction = "package/${entry.source.key}/${item.id}", symbol = item.icon?.symbol)
 }
-internal fun markdown(text: String, catalog: PackageCatalog?, jobs: StoreJobs) = PageBlock.Markdown(text,
-    catalog?.assets.orEmpty().mapNotNull { (id, _) -> jobs.image(catalog, id)?.let { "asset:$id" to it } }.toMap())
+internal fun markdown(text: String, catalog: PackageCatalog?, jobs: StoreJobs): PageBlock.Markdown {
+    // Literal references are the normal catalog format. Keep support for escaped Markdown destinations.
+    val escaped = '&' in text || '\\' in text
+    val images = catalog?.assets.orEmpty().keys.asSequence()
+        .filter { escaped || "asset:$it" in text }
+        .mapNotNull { id -> jobs.image(catalog, id)?.let { "asset:$id" to it } }
+        .toMap()
+    return PageBlock.Markdown(text, images)
+}
 internal fun thumbnails(entry: CatalogEntry, catalog: PackageCatalog?, jobs: StoreJobs) = PageBlock.Gallery(entry.item.thumbnails.mapNotNull { id ->
     jobs.image(catalog, id)?.let { resource -> catalog?.assets?.get(id)?.let { PageImage(resource, it.alt, it.width, it.height) } }
 })

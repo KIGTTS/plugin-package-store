@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class PackageStorePlugin(private val bundledStrings: (() -> PluginStrings)? = null) : KigPlugin {
-    override val descriptor = PluginDescriptor("tools.package-store", "拓展市场", "浏览、安装和更新插件与资源", "0.17.0")
+    override val descriptor = PluginDescriptor("tools.package-store", "拓展市场", "浏览、安装和更新插件与资源", "0.17.0", apiVersion = 36)
     override val localization = PluginLocalization(supportedLocales = listOf("zh-CN", "zh-CN-x-casual", "en", "ko", "ja"))
     private var strings: PluginStrings? = null
     private lateinit var environment: PluginEnvironment

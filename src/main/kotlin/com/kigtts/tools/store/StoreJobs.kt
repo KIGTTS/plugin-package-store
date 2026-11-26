@@ -42,7 +42,11 @@ class StoreJobs(private val environment: PluginEnvironment, private val sources:
             try {
                 val catalog = downloader.catalog(source)
                 sources.fetched(source.key, catalog)
-                artwork?.preload(catalog)
+                if (artwork != null && catalog.assets.isNotEmpty()) {
+                    // Rows and actions can use the fresh catalog while artwork is still downloading.
+                    changed()
+                    artwork.preload(catalog)
+                }
             }
             catch (cancel: CancellationException) { throw cancel }
             catch (failure: Exception) {
