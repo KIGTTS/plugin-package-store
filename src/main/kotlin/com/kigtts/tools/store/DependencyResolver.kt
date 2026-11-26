@@ -61,7 +61,9 @@ class DependencyResolver(private val entries: List<CatalogEntry>, private val in
             entry.item.releases.filter { it.compatible(device) && ranges.all { range -> range.contains(SemVersion.parse(it.version)) } }.map { PlannedRelease(entry, it) }
         }.distinctBy { Triple(it.release.version, it.release.sha256, it.release.expectedPublisher) }
             .sortedByDescending { SemVersion.parse(it.release.version) }
-        require(candidates.map { it.release.expectedPublisher }.distinct().size <= 1) { "相同包 ID 来自不同发布者，请停用冲突源" }
+        require(candidates.map { it.release.expectedPublisher }.filter(String::isNotBlank).distinct().size <= 1) {
+            "相同包 ID 来自不同发布者，请停用冲突源"
+        }
         // Reuse an installed version when it meets every requirement, but expand its declared dependencies if available.
         val reusable = old?.let { existing -> existing.apiVersion in device.minimumApi..device.api && runCatching { ranges.all { it.contains(SemVersion.parse(existing.version)) } }.getOrDefault(false) } == true
         val preferred = candidates.sortedBy { if (reusable && it.release.version == old!!.version) 0 else 1 }
@@ -76,12 +78,23 @@ class DependencyResolver(private val entries: List<CatalogEntry>, private val in
         return null
     }
     private fun ensurePublisher(id: String, publisher: String) {
-        val publishers = entries.filter { it.item.id == id }.flatMap { it.item.releases }.map { it.expectedPublisher }.distinct()
-        require(publishers.size <= 1 && (publishers.isEmpty() || publishers.single() == publisher)) { "相同包 ID 来自不同发布者，请停用冲突源" }
-        entries.filter { it.item.id == id }.flatMap { it.item.releases }.groupBy { it.version }.values.forEach { versions ->
+        val matching = entries.filter { it.item.id == id }
+        val allReleases = matching.flatMap { it.item.releases }
+        val publishers = allReleases.map { it.expectedPublisher }.filter(String::isNotBlank).distinct()
+        require(publishers.size <= 1 && (publisher.isEmpty() || publishers.isEmpty() || publishers.single() == publisher)) {
+            "相同包 ID 来自不同发布者，请停用冲突源"
+        }
+        if (allReleases.any { it.expectedPublisher.isEmpty() }) {
+            require(allReleases.all { it.format == PackageFormat.RESOURCE })
+            val versionsBySource = matching.map { entry -> entry.item.releases.map { it.version to it.sha256 }.toSet() }.distinct()
+            require(versionsBySource.size <= 1) { "未签名资源包来自不同源且内容不同，请停用冲突源" }
+        }
+        allReleases.groupBy { it.version }.values.forEach { versions ->
             require(versions.map { Triple(it.sha256, it.versionCode, it.format) }.distinct().size == 1) { "同一包版本在不同源中的内容不同，请停用冲突源" }
         }
-        installed[id]?.publisher?.let { require(it == publisher) { "发布者与已安装版本不一致" } }
+        installed[id]?.publisher?.takeIf { installed[id]?.format == PackageFormat.NATIVE }?.let {
+            require(it == publisher) { "发布者与已安装版本不一致" }
+        }
         installed[id]?.let { old -> require(entries.filter { it.item.id == id }.flatMap { it.item.releases }.all { it.format == old.format }) { "包格式与已安装项目不一致，请使用不同 ID" } }
     }
 }

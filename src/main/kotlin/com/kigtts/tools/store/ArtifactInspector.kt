@@ -16,7 +16,7 @@ class ArtifactInspector(private val storage: PluginStorage) {
     fun inspect(file: File, entry: CatalogEntry, release: PackageRelease, cancelled: () -> Unit = {}): VerifiedArtifact = ZipFile(file).use { zip ->
         require(file.length() == release.bytes && file.sha256() == release.sha256) { "缓存文件已变化" }
         val entries = zip.entries().asSequence().toList()
-        require(entries.size in 4..4096 && entries.map { it.name.lowercase() }.distinct().size == entries.size) { "包路径重复或数量无效" }
+        require(entries.size in 2..4096 && entries.map { it.name.lowercase() }.distinct().size == entries.size) { "包路径重复或数量无效" }
         require(entries.all { safeName(it.name) && it.size in 0..512L * 1024 * 1024 }) { "包包含不合法路径或大小" }
         require(entries.sumOf { it.size } <= 768L * 1024 * 1024) { "包解压后过大" }
         val manifestName = when (release.format) {
@@ -30,11 +30,15 @@ class ArtifactInspector(private val storage: PluginStorage) {
         require((manifest["apiVersion"]?.jsonPrimitive?.int ?: release.apiVersion) == release.apiVersion)
         require((manifest["minSdk"]?.jsonPrimitive?.int ?: release.minSdk) == release.minSdk)
         require(manifest["abis"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty().toSet() == release.abis.toSet()) { "包架构与目录不一致" }
-        val keyBytes = read(zip, "signature/public.der", 8192)
-        require(keyBytes.sha256() == release.expectedPublisher) { "包发布者与目录不一致" }
-        val key = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(keyBytes))
-        require((key as java.security.interfaces.RSAPublicKey).modulus.bitLength() >= 2048)
-        require(Signature.getInstance("SHA256withRSA").run { initVerify(key); update(raw); verify(read(zip, "signature/manifest.sig", 8192)) }) { "包签名不正确" }
+        if (release.format != PackageFormat.RESOURCE || release.expectedPublisher.isNotEmpty() ||
+            entries.any { it.name.startsWith("signature/") }) {
+            val keyBytes = read(zip, "signature/public.der", 8192)
+            require(release.expectedPublisher.isEmpty() || keyBytes.sha256() == release.expectedPublisher) { "包发布者与目录不一致" }
+            require(release.format == PackageFormat.RESOURCE || release.expectedPublisher.isNotEmpty())
+            val key = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(keyBytes))
+            require((key as java.security.interfaces.RSAPublicKey).modulus.bitLength() >= 2048)
+            require(Signature.getInstance("SHA256withRSA").run { initVerify(key); update(raw); verify(read(zip, "signature/manifest.sig", 8192)) }) { "包签名不正确" }
+        }
         release.permissions?.let { advertised ->
             val actual = manifest[if (release.format == PackageFormat.NATIVE) "capabilities" else "permissions"]
                 ?.jsonArray.orEmpty().map { it.jsonPrimitive.content }.filterNot { it == "ui" }.toSet()
@@ -50,6 +54,7 @@ class ArtifactInspector(private val storage: PluginStorage) {
             require(manifest.string("runtime") == "android-dex" && "code/classes.dex" in declared)
             require(entries.none { it.name.startsWith("code/oat") })
         } else {
+            require(payload.none { it.name == "plugin.json" || it.name.startsWith("code/") || it.name.startsWith("signature/") })
             val resource = PluginJson.decodeFromString<com.kigtts.plugin.api.ResourcePackageManifest>(raw.toString(Charsets.UTF_8))
             require(resource.schemaVersion == 1 && resource.resourceType == entry.item.resourceType && resource.dependencies == release.dependencies)
             require(resource.content in declared && safeName(resource.content)) { "资源包缺少内容目录" }

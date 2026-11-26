@@ -30,7 +30,7 @@ internal fun packageDetailsPage(id: String, sources: SourceStore, jobs: StoreJob
             PageBlock.Text(catalog?.name ?: entry.source.name), markdown(catalog?.readme?.ifBlank { catalog.description } ?: "", catalog, jobs), PageBlock.Text(copy.text("identifier", "id" to (entry.item.id).toString())), PageBlock.Text(copy.text("license", "license" to (entry.item.license).toString())))),
             PageBlock.Group(copy.text("selected_version"), buildList {
                 add(PageBlock.Text(release?.let { "${it.version} · Android ${it.minSdk}+ · KIGTTS API ${it.apiVersion}+" } ?: copy.text("no_compatible")))
-                release?.let { add(PageBlock.Text(copy.text("download.publisher", "hash" to it.expectedPublisher)))
+                release?.let { if (it.expectedPublisher.isNotBlank()) add(PageBlock.Text(copy.text("download.publisher", "hash" to it.expectedPublisher)))
                     add(PageBlock.Text(copy.text("download.package_size", "size" to ((it.bytes + 1023) / 1024).toString(), "mirrors" to it.mirrors.size.toString())))
                     if (it.dependencies.isNotEmpty()) add(PageBlock.Text(copy.text("download.requirements", "packages" to it.dependencies.entries.joinToString { dependency -> "${dependency.key} ${dependency.value}" }))) }
             })))

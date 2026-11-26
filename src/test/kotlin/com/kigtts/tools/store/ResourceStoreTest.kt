@@ -14,12 +14,15 @@ import java.io.File
 class ResourceStoreTest {
     @get:Rule val temp = TemporaryFolder()
     @Test fun acceptsResourceSourcesAndRejectsDisguisedExecutablePackages() {
-        val resource = entry("test.cards", release().copy(format = PackageFormat.RESOURCE)).item.copy(resourceType = ResourceType.QUICK_TEXT)
+        val resource = entry("test.cards", release().copy(format = PackageFormat.RESOURCE, expectedPublisher = "")).item.copy(resourceType = ResourceType.QUICK_TEXT)
         val source = catalog("test.resources", resource).copy(schemaVersion = 2, kind = SourceKind.RESOURCES)
         CatalogCodec.validate(source)
         assertThrows(IllegalArgumentException::class.java) { CatalogCodec.validate(source.copy(schemaVersion = 1)) }
         assertThrows(IllegalArgumentException::class.java) { CatalogCodec.validate(source.copy(packages = listOf(resource.copy(resourceType = null)))) }
         assertThrows(IllegalArgumentException::class.java) { CatalogCodec.validate(source.copy(packages = listOf(resource.copy(releases = listOf(release()))))) }
+        assertThrows(IllegalArgumentException::class.java) {
+            CatalogCodec.validate(catalog("test.plugins", entry("test.cards", release().copy(expectedPublisher = "")).item))
+        }
     }
     @Test fun verifiesSignedResourceIdentityAndAlwaysKeepsItOutOfPluginMetadata() {
         val fixture = signedFixture(temp.root, PackageFormat.RESOURCE)

@@ -10,7 +10,7 @@ import java.net.URI
 @Serializable enum class SourceKind { PLUGINS, RESOURCES }
 @Serializable data class PackageMirror(val name: String, val url: String)
 @Serializable data class PackageRelease(val version: String, val versionCode: Int, val format: PackageFormat,
-    val sha256: String, val bytes: Long, val expectedPublisher: String, val mirrors: List<PackageMirror>,
+    val sha256: String, val bytes: Long, val expectedPublisher: String = "", val mirrors: List<PackageMirror>,
     val apiVersion: Int = PLUGIN_API_VERSION, val minSdk: Int = 26, val abis: List<String> = emptyList(), val notes: String = "",
     val dependencies: Map<String, String> = emptyMap(),
     val permissions: List<String>? = null, val permissionPurposes: Map<String, String> = emptyMap())
@@ -65,7 +65,10 @@ object CatalogCodec {
                 }
                 require(release.version.length in 1..64 && release.versionCode > 0)
                 SemVersion.parse(release.version)
-                require(HASH.matches(release.sha256) && HASH.matches(release.expectedPublisher)) { throw StoreSourceIssue("source.issue.hash", "包与发布者的 SHA-256 必须填写 64 位小写十六进制值") }
+                require(HASH.matches(release.sha256) && (HASH.matches(release.expectedPublisher) ||
+                    release.format == PackageFormat.RESOURCE && release.expectedPublisher.isEmpty())) {
+                    throw StoreSourceIssue("source.issue.hash", "包 SHA-256 和插件发布者指纹必须填写 64 位小写十六进制值")
+                }
                 require(release.bytes in 1..256L * 1024 * 1024 && release.notes.length <= 2000)
                 require(release.apiVersion > 0 && release.minSdk in 26..99)
                 require(release.abis.size <= 8 && release.abis.all { it in setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") })

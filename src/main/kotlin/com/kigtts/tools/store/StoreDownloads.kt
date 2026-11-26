@@ -139,7 +139,7 @@ internal class StoreDownloads(private val environment: PluginEnvironment, privat
             // A receipt belongs to this caller and reports the actual library import, not package display.
             if (current.resourceToken != null) { reconcileResource(current); return PluginOutcome.RefreshUi }
             val reply = environment.appBroker?.request(AppCommand.ResourcePackage(source = resource(data.second.file),
-                expectedPublisher = data.first.release.expectedPublisher))
+                expectedPublisher = data.first.release.expectedPublisher.takeIf(String::isNotBlank)))
             val token = (reply as? AppReply.Data)?.value?.get("token")?.jsonPrimitive?.contentOrNull
             if (token != null) {
                 update(id) { it.copy(resourceToken = token) }
