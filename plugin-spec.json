@@ -1,6 +1,7 @@
 {
   "id": "tools.package-store",
   "name": "拓展市场",
+  "author": "KIGTTS",
   "version": "1.0.0",
   "versionCode": 10000,
   "entryClass": "com.kigtts.tools.store.PackageStorePlugin",

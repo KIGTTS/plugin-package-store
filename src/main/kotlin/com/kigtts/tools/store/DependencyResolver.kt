@@ -54,7 +54,13 @@ class DependencyResolver(private val entries: List<CatalogEntry>, private val in
         val ranges = constraints.getValue(unresolved)
         val old = installed[unresolved]
         if (old?.builtin == true) {
-            if (ranges.any { !it.contains(SemVersion.parse(old.version)) }) return null
+            val current = SemVersion.parse(old.version)
+            val preview = if (old.version == "1.0.0" && old.apiVersion == 1) when (old.id) {
+                "service.speech-synthesis" -> SemVersion.parse("0.8.5")
+                "service.speech-recognition" -> SemVersion.parse("0.8.4")
+                else -> null
+            } else null
+            if (ranges.any { !it.contains(current) && (preview == null || !it.contains(preview)) }) return null
             return search(selected, LinkedHashMap(constraints).also { it.remove(unresolved) }, expanded)
         }
         val candidates = entries.filter { it.item.id == unresolved }.flatMap { entry ->

@@ -62,13 +62,13 @@ class StoreUpdateButtonsTest {
         }
     }
 
-    @Test fun selectedHistoricVersionAndOldDownloadTaskCannotMaskANewApiRelease() = runTest {
-        val old = InstalledPackage("test.plugin", "1.0.0", 1, true, apiVersion = PLUGIN_API_VERSION - 1)
+    @Test fun selectedHistoricVersionAndOldDownloadTaskCannotMaskAStableRelease() = runTest {
+        val old = InstalledPackage("test.plugin", "1.0.0", 1, true, apiVersion = LAST_PREVIEW_PLUGIN_API)
         val (sources, jobs) = fixture(old)
         val older = release().copy(apiVersion = old.apiVersion)
         val oldEntry = entry(old.id, older)
         val task = jobs.downloads!!.offer(oldEntry, older.versionCode, jobs.installed)
-        val updated = entry(old.id, release())
+        val updated = entry(old.id, release(code = 10000))
         assertEquals("更新", downloadAction(updated, jobs, testDevice).label)
         assertEquals(StoreDownloadPhase.CONFIRM, jobs.downloads!!.task(task.id).phase)
         val history = entry(old.id, release("0.9.0"), release("2.0.0", 2))

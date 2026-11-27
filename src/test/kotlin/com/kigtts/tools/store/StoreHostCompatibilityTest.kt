@@ -31,6 +31,24 @@ class StoreHostCompatibilityTest {
         assertTrue(runCatching { DependencyResolver(listOf(reading, incompatible), installed, device).resolve(incompatible, 1) }.isFailure)
     }
 
+    @Test fun stableHostSatisfiesPreviewAndStableSpeechEngineDependencies() {
+        val device = StoreDevice(35, setOf("arm64-v8a"), api = 1)
+        val installed = listOf("service.speech-synthesis", "service.speech-recognition").associateWith {
+            InstalledPackage(it, "1.0.0", 10000, true, apiVersion = 1, builtin = true)
+        }
+        for (range in listOf("^0.8.3", "^1.0.0")) {
+            val engine = entry("test.speech-engine", release(dependencies = installed.keys.associateWith { range }))
+            val plan = DependencyResolver(listOf(engine), installed, device).resolve(engine, 1)
+            assertEquals(listOf(engine.item.id), plan.ordered.map { it.entry.item.id })
+            assertEquals(installed.keys, plan.retained.map { it.id }.toSet())
+        }
+        val incompatible = entry("test.speech-engine",
+            release(dependencies = mapOf("service.speech-synthesis" to "^0.9.0")))
+        assertThrows(IllegalStateException::class.java) {
+            DependencyResolver(listOf(incompatible), installed, device).resolve(incompatible, 1)
+        }
+    }
+
     @Test fun newerHostSupportsPhotoStickersWithoutDroppingOlderPlugins() {
         val device = StoreDevice(36, setOf("arm64-v8a"), api = 33)
         val photo = release().copy(apiVersion = 34, format = PackageFormat.RESOURCE)

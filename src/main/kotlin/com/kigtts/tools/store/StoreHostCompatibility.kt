@@ -1,12 +1,11 @@
 package com.kigtts.tools.store
 
-import com.kigtts.plugin.api.MIN_PLUGIN_API_VERSION
 import com.kigtts.plugin.api.PLUGIN_API_VERSION
 import kotlinx.serialization.json.*
 
 /** One shared device snapshot for browsing, dependency resolution and downloads. */
 class StoreDevice(val sdk: Int, val abis: Set<String>, api: Int = PLUGIN_API_VERSION,
-    minimumApi: Int = if (api >= 10) MIN_PLUGIN_API_VERSION else api) {
+    minimumApi: Int = if (api >= 9) 9 else api) {
     @Volatile private var supportedApis = minimumApi..api
     val api get() = supportedApis.last
     val minimumApi get() = supportedApis.first
