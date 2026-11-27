@@ -5,5 +5,5 @@ internal fun PackageRelease.isUpdateFrom(installed: InstalledPackage): Boolean {
     val versionOrder = SemVersion.parse(version).compareTo(SemVersion.parse(installed.version))
     return versionOrder > 0 ||
         (apiVersion > installed.apiVersion && versionOrder >= 0) ||
-        (format == PackageFormat.NATIVE && versionCode > installed.versionCode)
+        (format != PackageFormat.LUA && versionCode > installed.versionCode)
 }

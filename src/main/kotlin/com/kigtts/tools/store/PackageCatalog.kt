@@ -3,6 +3,8 @@ package com.kigtts.tools.store
 import com.kigtts.plugin.api.PLUGIN_API_VERSION
 import com.kigtts.plugin.api.PluginJson
 import com.kigtts.plugin.api.ResourceType
+import com.kigtts.plugin.api.supportsPluginApi
+import com.kigtts.plugin.api.supportsResourceApi
 import kotlinx.serialization.Serializable
 import java.net.URI
 
@@ -61,7 +63,8 @@ object CatalogCodec {
             item.releases.forEach { release ->
                 require((release.format == PackageFormat.RESOURCE) == (item.resourceType != null)) { "资源类型与安装包格式不一致" }
                 if (release.format == PackageFormat.RESOURCE) {
-                    require(release.apiVersion >= 29 && release.abis.isEmpty() && release.permissions.orEmpty().isEmpty() && release.permissionPurposes.isEmpty())
+                    require((release.apiVersion == 1 || release.apiVersion >= 29) &&
+                        release.abis.isEmpty() && release.permissions.orEmpty().isEmpty() && release.permissionPurposes.isEmpty())
                 }
                 require(release.version.length in 1..64 && release.versionCode > 0)
                 SemVersion.parse(release.version)
@@ -94,5 +97,8 @@ data class CatalogEntry(val source: SourceRecord, val item: CatalogPackage, val 
 data class InstalledPackage(val id: String, val version: String, val versionCode: Int, val enabled: Boolean, val publisher: String? = null,
     val apiVersion: Int = PLUGIN_API_VERSION, val format: PackageFormat = PackageFormat.NATIVE, val builtin: Boolean = false)
 internal fun PackageRelease.compatible(device: StoreDevice) = format != PackageFormat.LUA &&
-    apiVersion in device.minimumApi..device.api && minSdk <= device.sdk && (abis.isEmpty() || abis.any { it in device.abis })
+    compatibleWithApi(apiVersion, format, device) && minSdk <= device.sdk && (abis.isEmpty() || abis.any { it in device.abis })
+internal fun compatibleWithApi(version: Int, format: PackageFormat, device: StoreDevice) =
+    version in device.minimumApi..device.api || (device.api == PLUGIN_API_VERSION &&
+        if (format == PackageFormat.RESOURCE) supportsResourceApi(version) else supportsPluginApi(version))
 internal fun CatalogEntry.latest(device: StoreDevice) = item.releases.filter { it.compatible(device) && SemVersion.parse(it.version).pre.isEmpty() }.maxByOrNull { SemVersion.parse(it.version) }

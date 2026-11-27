@@ -65,7 +65,8 @@ class DependencyResolver(private val entries: List<CatalogEntry>, private val in
             "相同包 ID 来自不同发布者，请停用冲突源"
         }
         // Reuse an installed version when it meets every requirement, but expand its declared dependencies if available.
-        val reusable = old?.let { existing -> existing.apiVersion in device.minimumApi..device.api && runCatching { ranges.all { it.contains(SemVersion.parse(existing.version)) } }.getOrDefault(false) } == true
+        val reusable = old?.let { existing -> compatibleWithApi(existing.apiVersion, existing.format, device) &&
+            runCatching { ranges.all { it.contains(SemVersion.parse(existing.version)) } }.getOrDefault(false) } == true
         val preferred = candidates.sortedBy { if (reusable && it.release.version == old!!.version) 0 else 1 }
         for (candidate in preferred) {
             val answer = search(LinkedHashMap(selected).also { it[unresolved] = candidate }, constraints, expanded)
